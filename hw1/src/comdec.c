@@ -131,9 +131,10 @@ int decompress(FILE *in, FILE *out) {
  * the selected options.
  */
 int validargs(int argc, char **argv) {
+    global_options = 0;
     // no flags = invalid
     if (argc==1) {
-        global_options = 0;
+        //global_options = 0;
         return -1;
     }
 
@@ -143,7 +144,7 @@ int validargs(int argc, char **argv) {
     // -h
     if(string_compare(a1,"-h")==0) {
         // -h : least significant bit (bit0) = 1
-        global_options = 1; ////////////////////////////////////////
+        global_options = global_options | 1 << 0; // int = 32 bits
         // ignore rest
         return 0; // success if has -h flag
     }
@@ -152,9 +153,12 @@ int validargs(int argc, char **argv) {
         // just -c tag
         if(argc==2) {
             // -c : second-least-significant bit (bit1) = 1
-            global_options = 1; ///////////////////////////////////////////////////
+            global_options = global_options | 1 << 1;
             //16 most-significant bits = 0x0400
-            global_options = 1; ///////////////////////////////////////////////////
+            int df = 0x04000000;
+            int mask = ~((1 << 15) << 0);
+            global_options &= ~(mask << 0); // set 16 most-significant bits to 0
+            global_options |= (df & mask) << 0; // insert deafualt value (0x0400) into 16 most-significant bits
             return 0;
         }
         // -b tag with BLOCKSIZE
@@ -164,9 +168,11 @@ int validargs(int argc, char **argv) {
             int bs = string_to_int(a3);
             if(string_compare(a2,"-b")==0 && bs!=-1) {
                 // -c : second-least-significant bit (bit1) = 1
-                global_options = 1; ///////////////////////////////////////////////////
+                global_options = global_options | 1 << 1;
                 // BLOCKSIZE = 16 most-significant bits
-                global_options = bs; ///////////////////////////////////////////////////
+                int mask = ~((1 << 15) << 0);
+                global_options &= ~(mask << 0); // set 16 most-significant bits to 0
+                global_options |= (bs & mask) << 0; // insert BLOCKSIZE into 16 most-significant bits
                 return 0;
             }
         } // too many/few arguments
@@ -174,10 +180,10 @@ int validargs(int argc, char **argv) {
     // -d && no more arguements afterwards
     if (string_compare(a1,"-d")==0 && argc==2) {
         // -d : third-least-significant bit (bit2) = 1
-        global_options = 1; ////////////////////////////////////////////////
+        global_options = global_options | 0x00000004;
         return 0;
     }
     // not -h|-c|-d
-    global_options = 0;
+    //global_options = 0;
     return -1;
 }
