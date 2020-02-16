@@ -154,7 +154,6 @@ int validargs(int argc, char **argv) {
         global_options = 0;
         return -1;
     }
-
     //*(argv+0) = "bin/sequitur"
     // First Flag
     char *a1 = *(argv+1);
@@ -169,14 +168,9 @@ int validargs(int argc, char **argv) {
     if (string_compare(a1,"-c")==0) {
         // just -c tag
         if(argc==2) {
-
             //16 most-significant bits = 0x0400
             int df = 0x0400;
-            df = df << 16;
-            int mask = ~(1 << 15);
-            global_options = global_options & ~(mask); // set 16 most-significant bits to 0
-            global_options = global_options | (df & mask); // insert deafualt value (0x0400) into 16 most-significant bits
-
+            global_options = most_significant_bits_16(df, global_options);
             // -c : second-least-significant bit (bit1) = 1
             global_options = global_options | 1 << 1;
             return 0;
@@ -187,13 +181,8 @@ int validargs(int argc, char **argv) {
             char *a3 = *(argv+3); // BLOCKSIZE must be digits '0-9' and range 1-1024
             int bs = string_to_int(a3);
             if(string_compare(a2,"-b")==0 && bs!=-1) {
-
                 // BLOCKSIZE = 16 most-significant bits
-                bs = bs << 16; // set BLOCKSIZE index to 16 most-significant bits
-                int mask = ~(1 << 15);
-                global_options = global_options & ~(mask); // set 16 most-significant bits to 0
-                global_options = global_options |(bs & mask); // insert BLOCKSIZE into 16 most-significant bits
-
+                global_options = most_significant_bits_16(bs, global_options);
                 // -c : second-least-significant bit (bit1) = 1
                 global_options = global_options | 1 << 1;
                 return 0;
