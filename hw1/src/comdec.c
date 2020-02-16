@@ -52,7 +52,7 @@ int string_compare(char *as1, char *as2) {
 }
 
 /**
- * Converts String of digits into an int
+ * Converts String of digits into an int.
  *
  * @param as1 String to convert.
  * @return int value of as1 or -1 if as1 was not made out of digits (0-9).
@@ -69,6 +69,24 @@ int string_to_int(char *as1){
             return -1; // has to be digits only
         }
     }
+    return value;
+}
+
+/**
+ * Helper function for setting the 16 most-significant bits
+ *
+ * @param ai1 int to set into the 16 most-significant bits.
+ * @param ai2 int to palce ai1 into.
+ * @return int value of ai2 with its 16 most-significant bits as ai1.
+*/
+int most_significant_bits_16(int ai1, int ai2) {
+    int bits16 = ai1;
+    int value = ai2;
+    bits16 = bits16 << 16; // move to first 16 most-significant bits
+
+    int mask = ~(1 << 15);
+    value = value & ~(mask); // set 16 most-significant bits to 0
+    value = value | (bits16 & mask); // insert bits into 16 most-significant bits
     return value;
 }
 
@@ -131,10 +149,9 @@ int decompress(FILE *in, FILE *out) {
  * the selected options.
  */
 int validargs(int argc, char **argv) {
-    global_options = 0;
     // no flags = invalid
     if (argc==1) {
-        //global_options = 0;
+        global_options = 0;
         return -1;
     }
 
@@ -152,13 +169,16 @@ int validargs(int argc, char **argv) {
     if (string_compare(a1,"-c")==0) {
         // just -c tag
         if(argc==2) {
+
+            //16 most-significant bits = 0x0400
+            int df = 0x0400;
+            df = df << 16;
+            int mask = ~(1 << 15);
+            global_options = global_options & ~(mask); // set 16 most-significant bits to 0
+            global_options = global_options | (df & mask); // insert deafualt value (0x0400) into 16 most-significant bits
+
             // -c : second-least-significant bit (bit1) = 1
             global_options = global_options | 1 << 1;
-            //16 most-significant bits = 0x0400
-            int df = 0x04000000;
-            int mask = ~((1 << 15) << 0);
-            global_options &= ~(mask << 0); // set 16 most-significant bits to 0
-            global_options |= (df & mask) << 0; // insert deafualt value (0x0400) into 16 most-significant bits
             return 0;
         }
         // -b tag with BLOCKSIZE
@@ -167,12 +187,15 @@ int validargs(int argc, char **argv) {
             char *a3 = *(argv+3); // BLOCKSIZE must be digits '0-9' and range 1-1024
             int bs = string_to_int(a3);
             if(string_compare(a2,"-b")==0 && bs!=-1) {
+
+                // BLOCKSIZE = 16 most-significant bits
+                bs = bs << 16; // set BLOCKSIZE index to 16 most-significant bits
+                int mask = ~(1 << 15);
+                global_options = global_options & ~(mask); // set 16 most-significant bits to 0
+                global_options = global_options |(bs & mask); // insert BLOCKSIZE into 16 most-significant bits
+
                 // -c : second-least-significant bit (bit1) = 1
                 global_options = global_options | 1 << 1;
-                // BLOCKSIZE = 16 most-significant bits
-                int mask = ~((1 << 15) << 0);
-                global_options &= ~(mask << 0); // set 16 most-significant bits to 0
-                global_options |= (bs & mask) << 0; // insert BLOCKSIZE into 16 most-significant bits
                 return 0;
             }
         } // too many/few arguments
@@ -184,6 +207,6 @@ int validargs(int argc, char **argv) {
         return 0;
     }
     // not -h|-c|-d
-    //global_options = 0;
+    global_options = 0;
     return -1;
 }
