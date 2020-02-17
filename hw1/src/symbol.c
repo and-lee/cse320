@@ -19,8 +19,14 @@ int next_nonterminal_value = FIRST_NONTERMINAL;
  * to FIRST_NONTERMINAL;
  */
 void init_symbols(void) {
-    // To be implemented.
+    num_symbols = 0;
+    next_nonterminal_value = FIRST_NONTERMINAL;
 }
+
+/*
+ * Pointer to the list of recycled symbols.
+ */
+SYMBOL *recycled_symbols = NULL;
 
 /**
  * Get a new symbol.
@@ -46,8 +52,44 @@ void init_symbols(void) {
  * allocation.
  */
 SYMBOL *new_symbol(int value, SYMBOL *rule) {
-    // To be implemented.
-    return NULL;
+    // if symbol storage is full, new symbol cannot be created
+    if (num_symbols == MAX_SYMBOLS) {
+        // print message to stderr
+        fprintf(stderr, "%s\n", "Symbol storage is full, new symbol cannot be created.");
+        abort(); // call abort()
+    }
+
+    // create new symbol
+    SYMBOL *newS = NULL;
+
+    // no recycled symbols
+    if (recycled_symbols == NULL) {
+        // new symbol is allocated from the main symbol_storage arr
+        newS = symbol_storage + num_symbols;
+        num_symbols++;
+    } else {
+        // if there are any recycled symbols
+        // "remove" one from the list and use it to create a new symbol
+        newS = recycled_symbols;
+    }
+
+    newS -> value = value; // value of symbol = param value
+    // terminal : value < FIRST_NONTERMINAL && rule == NULL
+    if (value >= FIRST_NONTERMINAL && rule != NULL) { // nonterminal and rule specified
+        //rule = NULL if associated rule is not currently known and will be assigned later
+        rule++; // reference count of the rule is increased by one
+        // pointer to the rule is stored in the symbol
+    }
+    newS -> rule = rule; // rule of symbol = param rule
+    // other values = 0
+    newS -> refcnt = 0;
+    newS -> next = 0;
+    newS -> prev = 0;
+    newS -> nextr = 0;
+    newS -> prevr = 0;
+
+    // return pointer to new symbol
+    return newS;
 }
 
 /**
@@ -62,5 +104,6 @@ SYMBOL *new_symbol(int value, SYMBOL *rule) {
  * next field of the SYMBOL structure to chain together the entries.
  */
 void recycle_symbol(SYMBOL *s) {
-    // To be implemented.
+    s -> next = recycled_symbols; // recycled symbol becomes head
+    recycled_symbols = s; // place recycled symbol on top of "stack"
 }
