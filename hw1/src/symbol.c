@@ -74,15 +74,15 @@ SYMBOL *new_symbol(int value, SYMBOL *rule) {
     }
 
     newS -> value = value; // value of symbol = param value
+    newS -> rule = rule; // rule of symbol = param rule
+    newS -> refcnt = 0;
     // terminal : value < FIRST_NONTERMINAL && rule == NULL
     if (value >= FIRST_NONTERMINAL && rule != NULL) { // nonterminal and rule specified
         //rule = NULL if associated rule is not currently known and will be assigned later
-        rule++; // reference count of the rule is increased by one
+        (newS -> refcnt)++; // reference count of the rule is increased by one
         // pointer to the rule is stored in the symbol
     }
-    newS -> rule = rule; // rule of symbol = param rule
     // other values = 0
-    newS -> refcnt = 0;
     newS -> next = 0;
     newS -> prev = 0;
     newS -> nextr = 0;
