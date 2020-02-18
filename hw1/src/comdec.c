@@ -94,10 +94,10 @@ int most_significant_bits_16(int ai1, int ai2) {
  * Helper function for identifying special marker bytes from UTF-8.
  * Marker bytes : SOT = 0x81, SOB = 0x83, RD = 0x85, EOB = 0x84, EOT = 0x82
  *
- * @param ac char to check.
+ * @param ac int to check.
  * @return 1-5 if byte is a marker byte and -1 if the byte is not a marker byte.
 */
-int marker_byte(char ac) {
+int marker_byte(int ac) {
     if (ac == (char)0x81) {
         return 1;
     }
@@ -159,33 +159,96 @@ int decompress(FILE *in, FILE *out) {
         return EOF;
     }
 
-    char c = fgetc(in);
-    // does not start with SOT
-    if (marker_byte(c) != 1) {
-        return EOF;
-    }
-    // SOT -> EOT
-
     init_symbols();
     init_rules();
     int bytes_num = 0;
     int continuation = 0;
-    int value = 0;
-    SYMBOL *curr_rule = NULL;
+    int in_SOB = 0;
+    int is_EOB = 0;
+    ////int value = 0;
+    ////SYMBOL *curr_rule = NULL;
+    int symbol_count = 0;
     // read until end of file
-    while (!(feof(in))) {
-        // read input stream byte by byte
-        c = fgetc(in);
+    // read input stream byte by byte
+    int c;
+    while ((c = fgetc(in) != EOF) && continuation == -1) {
+        // marker bytes
+        if (!continuation) {
+            // has to start with SOT
+            if(bytes_num == 0 && marker_byte(c) != 1) {
+                return EOF;
+            }
+            // SOT has to immediately be followed by SOB | EOT
+            if(bytes_num == 1 && (marker_byte(c) != 2 || marker_byte(c) != 5)) {
+                return EOF;
+            }
+            // EOB has to immediately be followed by SOB | EOT
+            if(is_EOB == 0 && (marker_byte(c) == -1 || !(marker_byte(c) == 2 || marker_byte(c) == 5))) {
+                return EOF;
+            }
 
+            if((marker_byte(c) == 3 || marker_byte(c) == 4) && !in_SOB) {
+                return EOF;
+            }
 
-        if (continuation == 0) {
+            // SOB
+            if(marker_byte(c) == 2) {
+                in_SOB = 1;
+                is_EOB = 0;
+            }
+            // RD
+            if(marker_byte(c) == 3) {
+                if(symbol_count < 2) { // rule must have at least 3 symbols
+                    return EOF;
+                }
+                // create rule with symbols
+                ////curr_rule = NULL;
+            }
 
+            // EOB
+            if(marker_byte(c) == 4) {
+                if(!in_SOB) {
+                    return EOF;
+                }
+                in_SOB = 1;
+                is_EOB = 0;
+                // EXPAND AND PRINT ////////////////////////////////////////
+            }
+
+            // EOT
+            if(marker_byte(c) == 5) {
+                if(fgetc(in) == EOF) {
+                    return EOF;
+                } // else return bytes_num
+            }
+
+            // non marker
+            if(marker_byte(c) == -1) {
+                if(!in_SOB) { // has to be in_SOB
+                    return EOF;
+                }
+
+                //get header
+                // helper to get header. return cont.
+                // cast int as char to get rid of padding?
+                // header = 0 : value = lsb 7, cont. 0
+                // header = 110: value = lsb 5, cont. 1
+                // header = 111: value = lsb 5, cont. 2
+                // header = 1110: value = lsb 2, cont. 3
+                // set value
+            }
+        }
+
+        // calculate and concat continuation symbols
+        if (continuation) {
+            // calc value
+
+            // create
         }
 
 
-
         bytes_num++;
-        return bytes_num+1;
+        return bytes_num;
     }
     return EOF;
 }
