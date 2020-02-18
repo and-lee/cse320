@@ -91,6 +91,32 @@ int most_significant_bits_16(int ai1, int ai2) {
 }
 
 /**
+ * Helper function for identifying special marker bytes from UTF-8.
+ * Marker bytes : SOT = 0x81, SOB = 0x83, RD = 0x85, EOB = 0x84, EOT = 0x82
+ *
+ * @param ac char to check.
+ * @return 1-5 if byte is a marker byte and -1 if the byte is not a marker byte.
+*/
+int marker_byte(char ac) {
+    if (ac == (char)0x81) {
+        return 1;
+    }
+    if (ac == (char)0x83) {
+        return 2;
+    }
+    if (ac == (char)0x85) {
+        return 3;
+    }
+    if (ac == (char)0x84) {
+        return 4;
+    }
+    if (ac == (char)0x82) {
+        return 5;
+    }
+    return -1;
+}
+
+/**
  * Main compression function.
  * Reads a sequence of bytes from a specified input stream, segments the
  * input data into blocks of a specified maximum number of bytes,
@@ -128,7 +154,39 @@ int compress(FILE *in, FILE *out, int bsize) {
  * @return  The number of bytes written, in case of success, otherwise EOF.
  */
 int decompress(FILE *in, FILE *out) {
-    // To be implemented.
+    // could not open file
+    if (in == NULL || out == NULL) {
+        return EOF;
+    }
+
+    char c = fgetc(in);
+    // does not start with SOT
+    if (marker_byte(c) != 1) {
+        return EOF;
+    }
+    // SOT -> EOT
+
+    init_symbols();
+    init_rules();
+    int bytes_num = 0;
+    int continuation = 0;
+    int value = 0;
+    SYMBOL *curr_rule = NULL;
+    // read until end of file
+    while (!(feof(in))) {
+        // read input stream byte by byte
+        c = fgetc(in);
+
+
+        if (continuation == 0) {
+
+        }
+
+
+
+        bytes_num++;
+        return bytes_num+1;
+    }
     return EOF;
 }
 
