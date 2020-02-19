@@ -135,7 +135,7 @@ int header_byte(int ai) {
     if((ai & 0xf8) == 0xf0) { // 11110
         return 3;
     }
-    return -1;
+    return 0;
 }
 
 /**
@@ -152,7 +152,42 @@ int value_helper(int ai1, int ai2) {
     if(ai2 == 1 || ai2 == 2) { // 5 bits
         return (ai1 & 0x1f);
     }
+    if(ai2 == 3) { // 3 bits
+        return (ai1 & 0x7);
+    }
     return -1;
+}
+
+/**
+ * Helper function for getting the value a continuation byte.
+ *
+ * @param ai1 value.
+ * @return value of ai remaining bits without its header bits or -1 if invalid value.
+*/
+int continuation_value(int ai) {
+    if((ai & 0xc0) == 0x80) { // 6 bits
+        return (ai & 0x3f);
+    }
+    return -1;
+}
+
+void expand(SYMBOL *as, FILE *af) {
+    SYMBOL *head = as;
+    as = (as -> next);
+    while(as != head){
+        if((as -> value) >= FIRST_NONTERMINAL) {
+            /*
+            if(*(rule_map + start) == NULL) {
+                return -1; // undefined nonterminal
+            }
+            */
+            expand(*(rule_map + (as -> value)), af);
+        } else {
+            fputc((as -> value), af);
+        }
+        fflush(af); //
+        as = (as -> next);
+    }
 }
 
 /**
@@ -202,41 +237,44 @@ int decompress(FILE *in, FILE *out) {
     int continuation = 0;
     int in_SOB = 0;
     int is_EOB = 0;
+    in_SOB++;
+    in_SOB--;
+    is_EOB++;
+    is_EOB--;
     int value = -1;
     SYMBOL *curr_sym = NULL;
     SYMBOL *rule_head = NULL;
     int symbol_count = 0;
-    // read until end of file
-    // read input stream byte by byte
+    // read input stream byte by byte until the end of the input file
     int c;
-    while ((c = fgetc(in) != EOF) && continuation == -1) {
+    while ((c = fgetc(in)) != EOF) {
         // marker bytes
         if (!continuation) {
+            /*
             // has to start with SOT
-            if(bytes_num == 0 && marker_byte(c) != 1) {
+            if(bytes_num == 0 && (marker_byte(c) != 1)) {
                 return EOF;
             }
             // SOT has to immediately be followed by SOB | EOT
-            if(bytes_num == 1 && (marker_byte(c) != 2 || marker_byte(c) != 5)) {
+            if(bytes_num == 1 && ((marker_byte(c) != 2) || (marker_byte(c) != 5))) {
                 return EOF;
             }
             // EOB has to immediately be followed by SOB | EOT
-            if(is_EOB == 0 && (marker_byte(c) == -1 || !(marker_byte(c) == 2 || marker_byte(c) == 5))) {
+            if(is_EOB && ((marker_byte(c) == -1) || (!((marker_byte(c) == 2) || (marker_byte(c) == 5))))) {
                 return EOF;
             }
             // RD and EOB or symbols have to follow after SOB
-            if((marker_byte(c) == 3 || marker_byte(c) == 4 || marker_byte(c) == -1) && !in_SOB) {
+            if(((marker_byte(c) == 3) || (marker_byte(c) == 4) || (marker_byte(c) == -1)) && !in_SOB) {
                 return EOF;
             }
 
-            if(marker_byte(c) == 3 || marker_byte(c) == 4) {
+            if((marker_byte(c) == 3) || (marker_byte(c) == 4)) {
                 if(symbol_count < 2) { // rule must have at least 3 symbols
                     return EOF;
                 }
-                //rule_head = NULL;
-                //curr_sym = NULL;
                 symbol_count = 0;
             }
+            */
 
             // SOB
             if(marker_byte(c) == 2) {
@@ -249,52 +287,58 @@ int decompress(FILE *in, FILE *out) {
             if(marker_byte(c) == 3) {
                 curr_sym -> next = rule_head;
                 rule_head -> prev = curr_sym;
-                //rule_head = NULL;
-                //curr_sym = NULL;
+
             }
 
             // EOB
             if(marker_byte(c) == 4) {
                 in_SOB = 1;
                 is_EOB = 0;
-                // EXPAND AND PRINT ////////////////////////////////////////
-                fputc(value, out);
+                // EXPAND and write to output file
+                //expand(main_rule, out);
+                //fputc(value, out);
+                //fflush(out);
+                curr_sym -> next = rule_head;
+                rule_head -> prev = curr_sym;
+                expand(main_rule, out);
+
             }
 
             // EOT
             if(marker_byte(c) == 5) {
+                // should be EOF. nothing after
+                /*
                 if(fgetc(in) == EOF) {
                     return EOF;
                 } // else return bytes_num
+                */
             }
 
             // non marker
             if(marker_byte(c) == -1) {
-                //get header bits
-
-                // set value
+                continuation = header_byte(c); // header bits
+                value = value_helper(c, continuation); // set first value
             }
 
-            // create ////////
-            if(value!=-1 && !continuation) {
+            // create
+            if(!continuation) {
                 if(rule_head == NULL) { // create new rule
+                    /*
+                    // head of rule must be nonterminal
                     if(!(value >= FIRST_NONTERMINAL)) {
                         return EOF;
                     }
+                    // rule with head must not already exist
                     if(*(rule_map + value) != NULL) {
                         return EOF;
                     }
-                    //SYMBOL *newR = new_rule(value);
-                    //*(rule_map + value) = newR;
-                    //add_rule(newR);
+                    */
                     rule_head = new_rule(value);
                     *(rule_map + value) = rule_head;
                     add_rule(rule_head);
                     curr_sym = rule_head;
-                    //rule_head = newR;
-                    //curr_sym = newR;
                 } else { // create symbol
-                    SYMBOL *sym = new_symbol(value, NULL);
+                    SYMBOL *sym = new_symbol(value, NULL); // terminal = null. nonterminal = rule_head
                     sym -> prev = curr_sym;
                     curr_sym -> next = sym;
                     symbol_count++;
@@ -304,19 +348,16 @@ int decompress(FILE *in, FILE *out) {
         }
 
         // calculate and concat continuation symbols
-        if (continuation) {
-            // calc value
-            value += 0;
-
+        while (continuation) {
+            c = fgetc(in);
+            value = (value << 6) | continuation_value(c);
             continuation--;
-
         }
-
-
-        bytes_num++;
-        return bytes_num;
+        //bytes_num++;
+        //printf("%d\n", bytes_num);
     }
-    return EOF;
+    //return EOF;
+    return bytes_num;
 }
 
 /**
