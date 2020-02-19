@@ -80,38 +80,77 @@ int string_to_int(char *as1){
  * @return int value of ai2 with its 16 most-significant bits as ai1.
 */
 int most_significant_bits_16(int ai1, int ai2) {
-    int bits16 = ai1;
-    int value = ai2;
-    bits16 = bits16 << 16; // move to first 16 most-significant bits
+    //int bits16 = ai1;
+    //int value = ai2;
+    ai1 = ai1 << 16; // move to first 16 most-significant bits
 
     int mask = ~(1 << 15);
-    value = value & ~(mask); // set 16 most-significant bits to 0
-    value = value | (bits16 & mask); // insert bits into 16 most-significant bits
-    return value;
+    ai2 = ai2 & ~(mask); // set 16 most-significant bits to 0
+    ai2 = ai2 | (ai1 & mask); // insert bits into 16 most-significant bits
+    return ai2;
 }
 
 /**
  * Helper function for identifying special marker bytes from UTF-8.
  * Marker bytes : SOT = 0x81, SOB = 0x83, RD = 0x85, EOB = 0x84, EOT = 0x82
  *
- * @param ac int to check.
+ * @param ai int to check.
  * @return 1-5 if byte is a marker byte and -1 if the byte is not a marker byte.
 */
-int marker_byte(int ac) {
-    if (ac == (char)0x81) {
+int marker_byte(int ai) {
+    if (ai == 0x81) {
         return 1;
     }
-    if (ac == (char)0x83) {
+    if (ai == 0x83) {
         return 2;
     }
-    if (ac == (char)0x85) {
+    if (ai == 0x85) {
         return 3;
     }
-    if (ac == (char)0x84) {
+    if (ai == 0x84) {
         return 4;
     }
-    if (ac == (char)0x82) {
+    if (ai == 0x82) {
         return 5;
+    }
+    return -1;
+}
+
+/**
+ * Helper function for identifying header bits from byte.
+ *
+ * @param ai int to check.
+ * @return 0-4 for corresponding headers and -1 for no usable header.
+*/
+int header_byte(int ai) {
+    if((ai & 0x80) == 0) { // 0
+        return 0;
+    }
+    if((ai & 0xe0) == 0xc0) { // 110
+        return 1;
+    }
+    if((ai & 0xe0) == 0xe0) { // 111
+        return 2;
+    }
+    if((ai & 0xf8) == 0xf0) { // 11110
+        return 3;
+    }
+    return -1;
+}
+
+/**
+ * Helper function for getting the value of the byte using its header.
+ *
+ * @param ai1 value.
+ * @param ai2 type of header.
+ * @return value of ai remaining bits without its header bits.
+*/
+int value_helper(int ai1, int ai2) {
+    if(ai2 == 0) { // 7 bits
+        return ai1; // ai1 & 0x7f
+    }
+    if(ai2 == 1 || ai2 == 2) { // 5 bits
+        return (ai1 & 0x1f);
     }
     return -1;
 }
@@ -159,14 +198,13 @@ int decompress(FILE *in, FILE *out) {
         return EOF;
     }
 
-    init_symbols();
-    init_rules();
     int bytes_num = 0;
     int continuation = 0;
     int in_SOB = 0;
     int is_EOB = 0;
-    ////int value = 0;
-    ////SYMBOL *curr_rule = NULL;
+    int value = -1;
+    SYMBOL *curr_sym = NULL;
+    SYMBOL *rule_head = NULL;
     int symbol_count = 0;
     // read until end of file
     // read input stream byte by byte
@@ -186,33 +224,41 @@ int decompress(FILE *in, FILE *out) {
             if(is_EOB == 0 && (marker_byte(c) == -1 || !(marker_byte(c) == 2 || marker_byte(c) == 5))) {
                 return EOF;
             }
-
-            if((marker_byte(c) == 3 || marker_byte(c) == 4) && !in_SOB) {
+            // RD and EOB or symbols have to follow after SOB
+            if((marker_byte(c) == 3 || marker_byte(c) == 4 || marker_byte(c) == -1) && !in_SOB) {
                 return EOF;
+            }
+
+            if(marker_byte(c) == 3 || marker_byte(c) == 4) {
+                if(symbol_count < 2) { // rule must have at least 3 symbols
+                    return EOF;
+                }
+                //rule_head = NULL;
+                //curr_sym = NULL;
+                symbol_count = 0;
             }
 
             // SOB
             if(marker_byte(c) == 2) {
+                init_symbols();
+                init_rules();
                 in_SOB = 1;
                 is_EOB = 0;
             }
             // RD
             if(marker_byte(c) == 3) {
-                if(symbol_count < 2) { // rule must have at least 3 symbols
-                    return EOF;
-                }
-                // create rule with symbols
-                ////curr_rule = NULL;
+                curr_sym -> next = rule_head;
+                rule_head -> prev = curr_sym;
+                //rule_head = NULL;
+                //curr_sym = NULL;
             }
 
             // EOB
             if(marker_byte(c) == 4) {
-                if(!in_SOB) {
-                    return EOF;
-                }
                 in_SOB = 1;
                 is_EOB = 0;
                 // EXPAND AND PRINT ////////////////////////////////////////
+                fputc(value, out);
             }
 
             // EOT
@@ -224,26 +270,46 @@ int decompress(FILE *in, FILE *out) {
 
             // non marker
             if(marker_byte(c) == -1) {
-                if(!in_SOB) { // has to be in_SOB
-                    return EOF;
-                }
+                //get header bits
 
-                //get header
-                // helper to get header. return cont.
-                // cast int as char to get rid of padding?
-                // header = 0 : value = lsb 7, cont. 0
-                // header = 110: value = lsb 5, cont. 1
-                // header = 111: value = lsb 5, cont. 2
-                // header = 1110: value = lsb 2, cont. 3
                 // set value
+            }
+
+            // create ////////
+            if(value!=-1 && !continuation) {
+                if(rule_head == NULL) { // create new rule
+                    if(!(value >= FIRST_NONTERMINAL)) {
+                        return EOF;
+                    }
+                    if(*(rule_map + value) != NULL) {
+                        return EOF;
+                    }
+                    //SYMBOL *newR = new_rule(value);
+                    //*(rule_map + value) = newR;
+                    //add_rule(newR);
+                    rule_head = new_rule(value);
+                    *(rule_map + value) = rule_head;
+                    add_rule(rule_head);
+                    curr_sym = rule_head;
+                    //rule_head = newR;
+                    //curr_sym = newR;
+                } else { // create symbol
+                    SYMBOL *sym = new_symbol(value, NULL);
+                    sym -> prev = curr_sym;
+                    curr_sym -> next = sym;
+                    symbol_count++;
+                    curr_sym = sym;
+                }
             }
         }
 
         // calculate and concat continuation symbols
         if (continuation) {
             // calc value
+            value += 0;
 
-            // create
+            continuation--;
+
         }
 
 

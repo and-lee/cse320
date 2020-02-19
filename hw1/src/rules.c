@@ -73,14 +73,10 @@ void init_rules(void) {
  */
 SYMBOL *new_rule(int v) {
     SYMBOL *newR = NULL;
-    newR -> value = v;
-    newR -> rule = newR;
-    newR -> refcnt = 0;
+    newR = new_symbol(v, newR);
     newR -> next = newR;
     newR -> prev = newR;
-    newR -> nextr = 0;
-    newR -> prevr = 0;
-
+    //*(rule_map + v) = newR;
     return newR;
 }
 
