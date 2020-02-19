@@ -98,19 +98,19 @@ int most_significant_bits_16(int ai1, int ai2) {
  * @return 1-5 if byte is a marker byte and -1 if the byte is not a marker byte.
 */
 int marker_byte(int ai) {
-    if (ai == 0x81) {
+    if (ai == 0x81) { // SOT
         return 1;
     }
-    if (ai == 0x83) {
+    if (ai == 0x83) { // SOB
         return 2;
     }
-    if (ai == 0x85) {
+    if (ai == 0x85) { // RD
         return 3;
     }
-    if (ai == 0x84) {
+    if (ai == 0x84) { // EOB
         return 4;
     }
-    if (ai == 0x82) {
+    if (ai == 0x82) { // EOT
         return 5;
     }
     return -1;
@@ -171,9 +171,10 @@ int continuation_value(int ai) {
     return -1;
 }
 
-void expand(SYMBOL *as, FILE *af) {
+int expand(SYMBOL *as, FILE *af) {
     SYMBOL *head = as;
     as = (as -> next);
+    int i = 0;
     while(as != head){
         if((as -> value) >= FIRST_NONTERMINAL) {
             /*
@@ -184,10 +185,12 @@ void expand(SYMBOL *as, FILE *af) {
             expand(*(rule_map + (as -> value)), af);
         } else {
             fputc((as -> value), af);
+            i++;
         }
-        fflush(af); //
+        // fflush(af); //
         as = (as -> next);
     }
+    return i;
 }
 
 /**
@@ -237,19 +240,16 @@ int decompress(FILE *in, FILE *out) {
     int continuation = 0;
     int in_SOB = 0;
     int is_EOB = 0;
-    in_SOB++;
-    in_SOB--;
-    is_EOB++;
-    is_EOB--;
-    int value = -1;
+        in_SOB = in_SOB + is_EOB;
+    int value = 0;
     SYMBOL *curr_sym = NULL;
-    SYMBOL *rule_head = NULL;
+    SYMBOL *rule_head = NULL; // un needed ////
     int symbol_count = 0;
     // read input stream byte by byte until the end of the input file
     int c;
     while ((c = fgetc(in)) != EOF) {
         // marker bytes
-        if (!continuation) {
+        //if (!continuation) {
             /*
             // has to start with SOT
             if(bytes_num == 0 && (marker_byte(c) != 1)) {
@@ -276,31 +276,39 @@ int decompress(FILE *in, FILE *out) {
             }
             */
 
+
+            if(marker_byte(c) == 1) {
+                c = fgetc(in);
+
+            }
+
             // SOB
             if(marker_byte(c) == 2) {
                 init_symbols();
                 init_rules();
                 in_SOB = 1;
                 is_EOB = 0;
+                c = fgetc(in);
+;
             }
             // RD
             if(marker_byte(c) == 3) {
                 curr_sym -> next = rule_head;
                 rule_head -> prev = curr_sym;
-
+                c = fgetc(in);
+;
             }
 
             // EOB
             if(marker_byte(c) == 4) {
                 in_SOB = 1;
                 is_EOB = 0;
-                // EXPAND and write to output file
-                //expand(main_rule, out);
-                //fputc(value, out);
-                //fflush(out);
+
                 curr_sym -> next = rule_head;
                 rule_head -> prev = curr_sym;
-                expand(main_rule, out);
+                // EXPAND and write to output file
+                bytes_num += expand(main_rule, out);
+                c = fgetc(in);
 
             }
 
@@ -318,45 +326,49 @@ int decompress(FILE *in, FILE *out) {
             if(marker_byte(c) == -1) {
                 continuation = header_byte(c); // header bits
                 value = value_helper(c, continuation); // set first value
-            }
 
-            // create
-            if(!continuation) {
-                if(rule_head == NULL) { // create new rule
-                    /*
-                    // head of rule must be nonterminal
-                    if(!(value >= FIRST_NONTERMINAL)) {
-                        return EOF;
-                    }
-                    // rule with head must not already exist
-                    if(*(rule_map + value) != NULL) {
-                        return EOF;
-                    }
-                    */
-                    rule_head = new_rule(value);
-                    *(rule_map + value) = rule_head;
-                    add_rule(rule_head);
-                    curr_sym = rule_head;
-                } else { // create symbol
-                    SYMBOL *sym = new_symbol(value, NULL); // terminal = null. nonterminal = rule_head
-                    sym -> prev = curr_sym;
-                    curr_sym -> next = sym;
-                    symbol_count++;
-                    curr_sym = sym;
+                // calculate and concat continuation symbols
+                while (continuation) {
+                    c = fgetc(in);
+                    value = (value << 6) | continuation_value(c);
+                    continuation--;
                 }
-            }
-        }
 
-        // calculate and concat continuation symbols
-        while (continuation) {
-            c = fgetc(in);
-            value = (value << 6) | continuation_value(c);
-            continuation--;
-        }
-        //bytes_num++;
-        //printf("%d\n", bytes_num);
+                // create
+                if(!continuation) {
+                    if(rule_head == NULL) { // create new rule
+                        /*
+                        // head of rule must be nonterminal
+                        if(!(value >= FIRST_NONTERMINAL)) {
+                            return EOF;
+                        }
+                        // rule with head must not already exist
+                        if(*(rule_map + value) != NULL) {
+                            return EOF;
+                        }
+                        */
+                        rule_head = new_rule(value);
+                        *(rule_map + value) = rule_head;
+                        add_rule(rule_head);
+                        curr_sym = rule_head;
+                    } else { // create symbol
+                        SYMBOL *sym = new_symbol(value, NULL); // terminal = null. nonterminal = rule_head
+                        sym -> prev = curr_sym;
+                        curr_sym -> next = sym;
+                        symbol_count++;
+                        curr_sym = sym;
+                    }
+                }
+
+            }
+
+
+
+        //}
     }
     //return EOF;
+    fflush(out);
+    printf("%d\n", bytes_num);
     return bytes_num;
 }
 
