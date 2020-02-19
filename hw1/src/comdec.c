@@ -171,6 +171,9 @@ int continuation_value(int ai) {
     return -1;
 }
 
+/**
+*
+*/
 int expand(SYMBOL *as, FILE *af) {
     SYMBOL *head = as;
     as = (as -> next);
@@ -182,7 +185,7 @@ int expand(SYMBOL *as, FILE *af) {
                 return -1; // undefined nonterminal
             }
             */
-            expand(*(rule_map + (as -> value)), af);
+            i += expand(*(rule_map + as -> value), af);
         } else {
             fputc((as -> value), af);
             i++;
@@ -284,7 +287,6 @@ int decompress(FILE *in, FILE *out) {
 
             // SOB
             if(marker_byte(c) == 2) {
-                init_symbols();
                 init_rules();
                 in_SOB = 1;
                 is_EOB = 0;
@@ -296,7 +298,9 @@ int decompress(FILE *in, FILE *out) {
                 curr_sym -> next = rule_head;
                 rule_head -> prev = curr_sym;
                 c = fgetc(in);
-;
+                rule_head = NULL;
+                curr_sym = NULL;
+
             }
 
             // EOB
@@ -309,6 +313,8 @@ int decompress(FILE *in, FILE *out) {
                 // EXPAND and write to output file
                 bytes_num += expand(main_rule, out);
                 c = fgetc(in);
+                rule_head = NULL;
+                curr_sym = NULL;
 
             }
 
