@@ -97,12 +97,15 @@ int digram_put(SYMBOL *digram) {
     if(ptr != NULL) { // digram already exists
         return 1;
     }
+    // digram not well-formed
+    if(digram -> next == NULL) { // digram already exists
+        return -1;
+    }
     for(int i = 0; i < MAX_DIGRAMS; i++) {
         if((*(digram_table + i) == NULL) || (*(digram_table + i) == TOMBSTONE)) { // vacant entry
             *(digram_table + i) = digram; // insert
         }
     }
     // hash table full
-    // digram not well-formed ////////////////////
     return -1;
 }

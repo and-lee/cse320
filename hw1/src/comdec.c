@@ -219,15 +219,59 @@ int expand(SYMBOL *as, FILE *af) {
  * otherwise EOF.
  */
 int compress(FILE *in, FILE *out, int bsize) {
+    // output starts with SOT
+    fputc(0x81, out);
 
     int c;
+    int bytes_read_num = 0;
+    int bytes_written_num = 0;
     while ((c = fgetc(in)) != EOF) {
-        // terminal symbol ////CHECK
+        // SOB
+        if(bytes_read_num == 0) {
+            fputc(0x83, out);
+            init_symbols();
+            init_rules();
+            init_digram_hash();
+            main_rule = new_rule(next_nonterminal_value++);
+        }
+        ++bytes_read_num;
+
+
+        // Sequitur algorithm :
         SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
-        insert_after(main_rule, sym);
-        check_digram(sym -> prev);
+        insert_after(main_rule->prev, sym);
+        if(sym -> prev != main_rule) {
+            check_digram(sym -> prev);
+        }
+        // RD
+        // fputc(0x85, out);
+
+
+        // EOB
+        if(bytes_read_num == bsize) { // reached end of block
+            fputc(0x84, out);
+            bytes_read_num = 0;
+        }
+
+
     }
-    return EOF;
+    // EOF
+    if(bytes_read_num == 0) { // empty file
+        fputc(0x81, out); // SOT
+    } else { //////////////////////////////////////////////////////move if c == EOF
+        // less than bsize but EOF == EOB
+        // Sequitur algorithm:
+        SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
+        insert_after(main_rule->prev, sym);
+        if(sym -> prev != main_rule) {
+            check_digram(sym -> prev);
+        }
+
+        fputc(0x84, out);
+    }
+    // EOT
+    fputc(0x82, out);
+    return bytes_written_num;
 }
 
 /**
@@ -262,17 +306,14 @@ int decompress(FILE *in, FILE *out) {
     while ((c = fgetc(in)) != EOF) {
             // SOT has to immediately be followed by SOB | EOT
             if(is_SOT && (!(marker_byte(c) == 2) || (marker_byte(c) == 5))) {
-                printf("%s\n", "1");
                 return EOF;
             }
             // EOB has to immediately be followed by SOB | EOT
             if(is_EOB && (!((marker_byte(c) == 2) || (marker_byte(c) == 5)))) {
-                printf("%s\n", "2");
                 return EOF;
             }
             // Cannot have empty block
             if(is_SOB && (marker_byte(c) == 4)) {
-                printf("%s\n", "3");
                 return EOF;
             }
 

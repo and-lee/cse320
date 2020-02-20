@@ -22,15 +22,18 @@ int main(int argc, char **argv)
     if(validargs(argc, argv))
         USAGE(*argv, EXIT_FAILURE);
     debug("Options: 0x%x", global_options);
-    if(global_options & 1) // help
+    if(global_options & 1) // -h help
         USAGE(*argv, EXIT_SUCCESS);
-    if(global_options == 0x00000004) // decompress
-        decompress(stdin, stdout);
-
-    /*
-    if(global_options & 1) // compress
-        USAGE(*argv, EXIT_SUCCESS);
-    */
+    if(global_options == 0x00000004) {// -d decompress
+        if(decompress(stdin, stdout) == EOF) {
+            return EXIT_FAILURE;
+        }
+    }
+    if(global_options & 2) {// -c compress
+        if(compress(stdin, stdout, global_options >> 16) == EOF) {
+            return EXIT_FAILURE;
+        }
+    }
     return EXIT_SUCCESS;
 }
 
