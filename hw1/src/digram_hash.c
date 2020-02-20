@@ -13,7 +13,9 @@
  * Clear the digram hash table.
  */
 void init_digram_hash(void) {
-    // To be implemented.
+    for(int i = 0; i < MAX_DIGRAMS; i++) {
+        *(digram_table+i) = NULL;
+    }
 }
 
 /**
@@ -25,7 +27,25 @@ void init_digram_hash(void) {
  * symbol values) in the hash table, if there is one, otherwise NULL.
  */
 SYMBOL *digram_get(int v1, int v2) {
-    // To be implemented.
+    int index = DIGRAM_HASH(v1, v2); // gives digram_table index
+    for(int i = index; i < MAX_DIGRAMS; i++) {
+        if(*(digram_table + i) == NULL) { // first NULL entry
+            return NULL;
+        }
+        if(((*(digram_table + i)) -> value) == v1
+            && ((*(digram_table + i)) -> next -> value) == v2) {
+            return *(digram_table + i);
+        }
+    }
+    for(int i = 0; i < index; i++) {
+        if(*(digram_table+i) == NULL) { // first NULL entry
+            return NULL;
+        }
+        if(((*(digram_table + i)) -> value) == v1
+            && ((*(digram_table + i)) -> next -> value) == v2) {
+            return *(digram_table + i);
+        }
+    }
     return NULL;
 }
 
@@ -64,6 +84,22 @@ int digram_delete(SYMBOL *digram) {
  * table being full or the given digram not being well-formed.
  */
 int digram_put(SYMBOL *digram) {
-    // To be implemented.
+    // insertion
+    // find vacant entry
+    SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
+    if(ptr == NULL) {
+
+    } else {
+        return 1; // digram already exists
+    }
+
+    for(int i = 0; i < MAX_DIGRAMS; i++) {
+        if(*(digram_table + i) == NULL) { // vacant entry
+
+        }
+
+    }
+    // hash table full
+    // digram
     return -1;
 }

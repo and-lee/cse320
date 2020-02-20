@@ -219,7 +219,14 @@ int expand(SYMBOL *as, FILE *af) {
  * otherwise EOF.
  */
 int compress(FILE *in, FILE *out, int bsize) {
-    // To be implemented.
+
+    int c;
+    while ((c = fgetc(in)) != EOF) {
+        // terminal symbol ////CHECK
+        SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
+        insert_after(main_rule, sym);
+        check_digram(sym -> prev);
+    }
     return EOF;
 }
 
@@ -234,56 +241,69 @@ int compress(FILE *in, FILE *out, int bsize) {
  * @return  The number of bytes written, in case of success, otherwise EOF.
  */
 int decompress(FILE *in, FILE *out) {
-    // could not open file
-    if (in == NULL || out == NULL) {
-        return EOF;
-    }
-
-    int bytes_num = 0;
     int continuation = 0;
+    int is_SOT = 1;
     int in_SOB = 0;
+    int is_SOB = 0;
     int is_EOB = 0;
     int value = 0;
     SYMBOL *rule_head = NULL;
     int symbol_count = 0;
     // read input stream byte by byte until the end of the input file
     init_symbols();
-    int c;
+    int c = fgetc(in);
+    int bytes_num = 0;
+    // SOT has to be first byte
+    if(marker_byte(c) != 1) {
+        return EOF;
+    }
+
     while ((c = fgetc(in)) != EOF) {
             // SOT has to immediately be followed by SOB | EOT
-            if(bytes_num == 1 && ((marker_byte(c) != 2) || (marker_byte(c) != 5))) {
+            if(is_SOT && (!(marker_byte(c) == 2) || (marker_byte(c) == 5))) {
+                printf("%s\n", "1");
                 return EOF;
             }
             // EOB has to immediately be followed by SOB | EOT
             if(is_EOB && (!((marker_byte(c) == 2) || (marker_byte(c) == 5)))) {
+                printf("%s\n", "2");
                 return EOF;
             }
+            // Cannot have empty block
+            if(is_SOB && (marker_byte(c) == 4)) {
+                printf("%s\n", "3");
+                return EOF;
+            }
+
+            if(marker_byte(c) != 1) {
+                is_SOT = 0;
+            }
+            if(marker_byte(c) != 2) {
+                is_SOB = 0;
+            }
+            if(marker_byte(c) != 4) {
+                is_EOB = 0;
+            }
+
             // RD, EOB, symbols occur only after SOB (in a block)
             if(!in_SOB && ((marker_byte(c) == 3) || (marker_byte(c) == 4) || (marker_byte(c) == -1))) {
                 return EOF;
             }
             // RD | EOB
             if((marker_byte(c) == 3) || (marker_byte(c) == 4)) {
-                // rule must have at least 0 | 3 symbols ( 0 = empty block)
-                if(symbol_count < 3 || symbol_count == 0) {
+                // rule must have at least 3 symbols
+                if(symbol_count < 3) {
                     return EOF;
                 }
                 symbol_count = 0;
             }
 
-            // SOT
-            if(marker_byte(c) == 1) {
-                // must be first byte
-                if(bytes_num != 0) {
-                    return EOF;
-                }
-            }
             // SOB
             if(marker_byte(c) == 2) {
                 init_rules();
 
                 in_SOB = 1;
-                is_EOB = 0;
+                is_SOB = 1;
             }
             // RD
             if(marker_byte(c) == 3) {
@@ -292,7 +312,7 @@ int decompress(FILE *in, FILE *out) {
             }
             // EOB
             if(marker_byte(c) == 4) {
-                in_SOB = 1;
+                in_SOB = 0;
                 is_EOB = 0;
 
                 rule_head -> prev -> next = rule_head;
@@ -302,14 +322,10 @@ int decompress(FILE *in, FILE *out) {
                     return EOF;
                 }
                 rule_head = NULL;
-
             }
             // EOT
             if(marker_byte(c) == 5) {
-                // has to be last byte
-                if(fgetc(in) != EOF) {
-                    return EOF;
-                }
+                return bytes_num; // exit
             }
 
             // non marker
