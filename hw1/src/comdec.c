@@ -249,6 +249,7 @@ int decompress(FILE *in, FILE *out) {
     SYMBOL *rule_head = NULL; // un needed ////
     int symbol_count = 0;
     // read input stream byte by byte until the end of the input file
+    init_symbols();
     int c;
     while ((c = fgetc(in)) != EOF) {
         // marker bytes
@@ -287,11 +288,12 @@ int decompress(FILE *in, FILE *out) {
 
             // SOB
             if(marker_byte(c) == 2) {
+                //printf("%s\n", "SOB");
                 init_rules();
                 in_SOB = 1;
                 is_EOB = 0;
                 c = fgetc(in);
-;
+
             }
             // RD
             if(marker_byte(c) == 3) {
@@ -305,6 +307,7 @@ int decompress(FILE *in, FILE *out) {
 
             // EOB
             if(marker_byte(c) == 4) {
+                //printf("%s\n", "EOB");
                 in_SOB = 1;
                 is_EOB = 0;
 
@@ -312,7 +315,7 @@ int decompress(FILE *in, FILE *out) {
                 rule_head -> prev = curr_sym;
                 // EXPAND and write to output file
                 bytes_num += expand(main_rule, out);
-                c = fgetc(in);
+                //c = fgetc(in);
                 rule_head = NULL;
                 curr_sym = NULL;
 
@@ -342,6 +345,7 @@ int decompress(FILE *in, FILE *out) {
 
                 // create
                 if(!continuation) {
+                    //printf("%x\n", value);
                     if(rule_head == NULL) { // create new rule
                         /*
                         // head of rule must be nonterminal
@@ -372,9 +376,7 @@ int decompress(FILE *in, FILE *out) {
 
         //}
     }
-    //return EOF;
     fflush(out);
-    printf("%d\n", bytes_num);
     return bytes_num;
 }
 
