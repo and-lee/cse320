@@ -70,8 +70,16 @@ SYMBOL *digram_get(int v1, int v2) {
  * sense to do it here.
  */
 int digram_delete(SYMBOL *digram) {
-    // To be implemented.
-    return -1;
+    SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
+    if(ptr != NULL) { // digram has to exist
+        for(int i = 0; i < MAX_DIGRAMS; i++) {
+            if(*(digram_table + i) == digram) { // found
+                *(digram_table + i) = TOMBSTONE; // delete
+                return 0; // successful deletion
+            }
+        }
+    }
+    return -1; // digram did not exist
 }
 
 /**
@@ -85,14 +93,13 @@ int digram_delete(SYMBOL *digram) {
  */
 int digram_put(SYMBOL *digram) {
     // insertion
+    SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
+    if(ptr != NULL) { // digram already exists
+        return 1;
+    }
     for(int i = 0; i < MAX_DIGRAMS; i++) {
-        if(*(digram_table + i) == NULL) { // vacant entry
-            SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
-            if(ptr == NULL) {
-                *(digram_table + i) = digram; // insert
-            } else {
-                return 1; // digram already exists
-            }
+        if((*(digram_table + i) == NULL) || (*(digram_table + i) == TOMBSTONE)) { // vacant entry
+            *(digram_table + i) = digram; // insert
         }
     }
     // hash table full
