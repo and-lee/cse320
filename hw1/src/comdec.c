@@ -249,6 +249,7 @@ int decompress(FILE *in, FILE *out) {
     int value = 0;
     SYMBOL *rule_head = NULL;
     int symbol_count = 0;
+    int rule_count = 0;
     // read input stream byte by byte until the end of the input file
     init_symbols();
     int c = fgetc(in);
@@ -289,13 +290,18 @@ int decompress(FILE *in, FILE *out) {
             if(!in_SOB && ((marker_byte(c) == 3) || (marker_byte(c) == 4) || (marker_byte(c) == -1))) {
                 return EOF;
             }
+
             // RD | EOB
             if((marker_byte(c) == 3) || (marker_byte(c) == 4)) {
+                rule_head -> prev -> next = rule_head;
                 // rule must have at least 3 symbols
                 if(symbol_count < 3) {
-                    return EOF;
+                    if(!(!rule_count && (symbol_count == 2) && IS_NONTERMINAL(rule_head -> next))) {
+                        return EOF;
+                    }
                 }
                 symbol_count = 0;
+                rule_count = 0;
             }
 
             // SOB
@@ -307,7 +313,6 @@ int decompress(FILE *in, FILE *out) {
             }
             // RD
             if(marker_byte(c) == 3) {
-                rule_head -> prev -> next = rule_head;
                 rule_head = NULL;
             }
             // EOB
@@ -315,7 +320,6 @@ int decompress(FILE *in, FILE *out) {
                 in_SOB = 0;
                 is_EOB = 0;
 
-                rule_head -> prev -> next = rule_head;
                 // EXPAND and write to output file
                 bytes_num += expand(main_rule, out);
                 if (bytes_num==-1) {
@@ -327,7 +331,6 @@ int decompress(FILE *in, FILE *out) {
             if(marker_byte(c) == 5) {
                 return bytes_num; // exit
             }
-
             // non marker
             if(marker_byte(c) == -1) {
                 continuation = header_byte(c); // header bits
@@ -354,6 +357,7 @@ int decompress(FILE *in, FILE *out) {
                         rule_head = new_rule(value);
                         *(rule_map + value) = rule_head;
                         add_rule(rule_head);
+                        rule_count++;
                     } else { // create symbol
                         SYMBOL *sym = new_symbol(value, NULL);
                         // terminal = null. nonterminal = rule_head
