@@ -85,21 +85,17 @@ int digram_delete(SYMBOL *digram) {
  */
 int digram_put(SYMBOL *digram) {
     // insertion
-    // find vacant entry
-    SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
-    if(ptr == NULL) {
-
-    } else {
-        return 1; // digram already exists
-    }
-
     for(int i = 0; i < MAX_DIGRAMS; i++) {
         if(*(digram_table + i) == NULL) { // vacant entry
-
+            SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
+            if(ptr == NULL) {
+                *(digram_table + i) = digram; // insert
+            } else {
+                return 1; // digram already exists
+            }
         }
-
     }
     // hash table full
-    // digram
+    // digram not well-formed ////////////////////
     return -1;
 }
