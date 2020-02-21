@@ -28,22 +28,21 @@ void init_digram_hash(void) {
  */
 SYMBOL *digram_get(int v1, int v2) {
     int index = DIGRAM_HASH(v1, v2); // gives digram_table index
-    for(int i = index; i < MAX_DIGRAMS; i++) {
-        if(*(digram_table + i) == NULL) { // first NULL entry
+    while(*(digram_table + index) != NULL) { // diagram has to exist
+        if(*(digram_table + index) == NULL) { // first NULL entry
             return NULL;
         }
-        if(((*(digram_table + i)) -> value) == v1
-            && ((*(digram_table + i)) -> next -> value) == v2) {
-            return *(digram_table + i);
-        }
-    }
-    for(int i = 0; i < index; i++) {
-        if(*(digram_table+i) == NULL) { // first NULL entry
+        if((*(digram_table + index)) == TOMBSTONE) { //TOMBSTONE
             return NULL;
         }
-        if(((*(digram_table + i)) -> value) == v1
-            && ((*(digram_table + i)) -> next -> value) == v2) {
-            return *(digram_table + i);
+        if(((*(digram_table + index)) -> value) == v1
+            && ((*(digram_table + index)) -> next -> value) == v2) {
+            return *(digram_table + index);
+        }
+
+        index++;
+        if(index == MAX_DIGRAMS) {
+            index = 0;
         }
     }
     return NULL;
@@ -70,13 +69,16 @@ SYMBOL *digram_get(int v1, int v2) {
  * sense to do it here.
  */
 int digram_delete(SYMBOL *digram) {
-    SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
-    if(ptr != NULL) { // digram has to exist
-        for(int i = 0; i < MAX_DIGRAMS; i++) {
-            if(*(digram_table + i) == digram) { // found
-                *(digram_table + i) = TOMBSTONE; // delete
+    int i = DIGRAM_HASH(digram -> value, digram -> next -> value);
+    while(*(digram_table + i) != NULL) { // diagram has to exist
+        if(*(digram_table + i) == digram) { // found
+            *(digram_table + i) = TOMBSTONE; // delete
                 return 0; // successful deletion
-            }
+        }
+
+        i++;
+        if(i == MAX_DIGRAMS) {
+            i = 0;
         }
     }
     return -1; // digram did not exist
@@ -93,17 +95,24 @@ int digram_delete(SYMBOL *digram) {
  */
 int digram_put(SYMBOL *digram) {
     // insertion
-    SYMBOL *ptr = digram_get(digram -> value, digram -> next -> value);
-    if(ptr != NULL) { // digram already exists
-        return 1;
-    }
     // digram not well-formed
-    if(digram -> next == NULL) { // digram already exists
+    if(digram -> next == NULL) {
         return -1;
     }
-    for(int i = 0; i < MAX_DIGRAMS; i++) {
+    // digram already exists
+    if(digram_get(digram->value, digram->next->value)) {
+        return 1;
+    }
+
+    int i = DIGRAM_HASH(digram->value, digram->next->value);
+    while(*(digram_table + i) != NULL) { // diagram has to exist
         if((*(digram_table + i) == NULL) || (*(digram_table + i) == TOMBSTONE)) { // vacant entry
             *(digram_table + i) = digram; // insert
+            return 0;
+        }
+        i++;
+        if(i==MAX_DIGRAMS) {
+            i = 0;
         }
     }
     // hash table full

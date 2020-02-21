@@ -71,6 +71,7 @@ SYMBOL *new_symbol(int value, SYMBOL *rule) {
         // if there are any recycled symbols
         // "remove" one from the list and use it to create a new symbol
         newS = recycled_symbols;
+        recycled_symbols = recycled_symbols -> next;
     }
 
     newS -> value = value; // value of symbol = param value
@@ -79,7 +80,7 @@ SYMBOL *new_symbol(int value, SYMBOL *rule) {
     // terminal : value < FIRST_NONTERMINAL && rule == NULL
     if (value >= FIRST_NONTERMINAL && rule != NULL) { // nonterminal and rule specified
         //rule = NULL if associated rule is not currently known and will be assigned later
-        (newS -> refcnt)++; // reference count of the rule is increased by one
+        ref_rule(newS); // reference count of the rule is increased by one
         // pointer to the rule is stored in the symbol
     }
     // other values = 0

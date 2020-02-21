@@ -76,7 +76,7 @@ SYMBOL *new_rule(int v) {
     newR = new_symbol(v, newR);
     newR -> next = newR;
     newR -> prev = newR;
-    //*(rule_map + v) = newR;
+    newR -> rule = newR;
     return newR;
 }
 
@@ -93,14 +93,14 @@ SYMBOL *new_rule(int v) {
  */
 void add_rule(SYMBOL *rule) {
     if(main_rule == NULL) {
+        rule -> nextr = rule;
+        rule -> prevr = rule;
         main_rule = rule;
-        main_rule -> nextr = rule;
-        main_rule -> prevr = rule;
     } else {
         rule -> prevr = main_rule -> prevr;
-        rule -> prevr -> nextr = rule;
-        main_rule -> prevr = rule;
+        main_rule -> prevr -> nextr = rule;
         rule -> nextr = main_rule;
+        main_rule -> prevr = rule;
     }
 }
 

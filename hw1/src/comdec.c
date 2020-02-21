@@ -221,10 +221,10 @@ int expand(SYMBOL *as, FILE *af) {
 int compress(FILE *in, FILE *out, int bsize) {
     // output starts with SOT
     fputc(0x81, out);
-
+    bsize*=1024;
     int c;
     int bytes_read_num = 0;
-    int bytes_written_num = 0;
+    int bytes_written_num = 1;
     while ((c = fgetc(in)) != EOF) {
         // SOB
         if(bytes_read_num == 0) {
@@ -232,25 +232,33 @@ int compress(FILE *in, FILE *out, int bsize) {
             init_symbols();
             init_rules();
             init_digram_hash();
-            main_rule = new_rule(next_nonterminal_value++);
+            SYMBOL * newR = new_rule(next_nonterminal_value++);
+            add_rule(newR);
+            bytes_written_num++;
         }
         ++bytes_read_num;
 
 
         // Sequitur algorithm :
         SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
-        insert_after(main_rule->prev, sym);
-        if(sym -> prev != main_rule) {
+        insert_after(main_rule -> prev, sym);
+        if(sym -> prev != main_rule) { // diagram = 2 symbols
             check_digram(sym -> prev);
         }
-        // RD
-        // fputc(0x85, out);
 
+        if(bytes_read_num == bsize-1) { // reached end of block
+            // convert to UTF-8
+            // print to output
+            // RD
+            // fputc(0x85, out);
+            for(int i =0; i<MAX_DIGRAMS; i++){
+                printf("%p\n", *(digram_table+i));
+            }
 
-        // EOB
-        if(bytes_read_num == bsize) { // reached end of block
+            // EOB
             fputc(0x84, out);
             bytes_read_num = 0;
+            bytes_written_num++;
         }
 
 
@@ -258,19 +266,20 @@ int compress(FILE *in, FILE *out, int bsize) {
     // EOF
     if(bytes_read_num == 0) { // empty file
         fputc(0x81, out); // SOT
-    } else { //////////////////////////////////////////////////////move if c == EOF
+    } else {
         // less than bsize but EOF == EOB
         // Sequitur algorithm:
         SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
         insert_after(main_rule->prev, sym);
         if(sym -> prev != main_rule) {
-            check_digram(sym -> prev);
+            check_digram(sym);
         }
-
+        bytes_written_num++;
         fputc(0x84, out);
     }
     // EOT
     fputc(0x82, out);
+    bytes_written_num++;
     return bytes_written_num;
 }
 
@@ -294,7 +303,6 @@ int decompress(FILE *in, FILE *out) {
     SYMBOL *rule_head = NULL;
     int symbol_count = 0;
     int rule_count = 0;
-    // read input stream byte by byte until the end of the input file
     init_symbols();
     int c = fgetc(in);
     int bytes_num = 0;
@@ -302,7 +310,7 @@ int decompress(FILE *in, FILE *out) {
     if(marker_byte(c) != 1) {
         return EOF;
     }
-
+    // read input stream byte by byte until the end of the input file
     while ((c = fgetc(in)) != EOF) {
             // SOT has to immediately be followed by SOB | EOT
             if(is_SOT && (!(marker_byte(c) == 2) || (marker_byte(c) == 5))) {
@@ -368,12 +376,12 @@ int decompress(FILE *in, FILE *out) {
                 }
                 rule_head = NULL;
             }
-            // EOT
-            if(marker_byte(c) == 5) {
-                return bytes_num; // exit
-            }
+
             // non marker
-            if(marker_byte(c) == -1) {
+            if((marker_byte(c) == -1)) {
+                if(!in_SOB) {
+                    return EOF;
+                }
                 continuation = header_byte(c); // header bits
                 value = value_helper(c, continuation); // set first value
                 // calculate and concat continuation symbols
@@ -411,6 +419,10 @@ int decompress(FILE *in, FILE *out) {
             }
     }
     fflush(out);
+    // EOT
+    if(marker_byte(c) != 5) {
+        return EOF;
+    }
     return bytes_num;
 }
 
