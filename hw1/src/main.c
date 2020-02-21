@@ -30,7 +30,7 @@ int main(int argc, char **argv)
         }
     }
     if(global_options & 2) {// -c compress
-        if(compress(stdin, stdout, global_options >> 16) == EOF) {
+        if(compress(stdin, stdout, ((global_options >> 16)*1024)) == EOF) {
             return EXIT_FAILURE;
         }
     }

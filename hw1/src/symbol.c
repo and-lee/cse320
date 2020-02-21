@@ -13,6 +13,11 @@
  */
 int next_nonterminal_value = FIRST_NONTERMINAL;
 
+/*
+ * Pointer to the list of recycled symbols.
+ */
+SYMBOL *recycled_symbols = NULL;
+
 /**
  * Initialize the symbols module.
  * Frees all symbols, setting num_symbols to 0, and resets next_nonterminal_value
@@ -21,12 +26,8 @@ int next_nonterminal_value = FIRST_NONTERMINAL;
 void init_symbols(void) {
     num_symbols = 0;
     next_nonterminal_value = FIRST_NONTERMINAL;
+    recycled_symbols = NULL;
 }
-
-/*
- * Pointer to the list of recycled symbols.
- */
-SYMBOL *recycled_symbols = NULL;
 
 /**
  * Get a new symbol.
@@ -77,11 +78,8 @@ SYMBOL *new_symbol(int value, SYMBOL *rule) {
     newS -> value = value; // value of symbol = param value
     newS -> rule = rule; // rule of symbol = param rule
     newS -> refcnt = 0;
-    // terminal : value < FIRST_NONTERMINAL && rule == NULL
-    if (value >= FIRST_NONTERMINAL && rule != NULL) { // nonterminal and rule specified
-        //rule = NULL if associated rule is not currently known and will be assigned later
-        ref_rule(newS); // reference count of the rule is increased by one
-        // pointer to the rule is stored in the symbol
+    if (rule != NULL) { // nonterminal and rule specified
+        ref_rule(rule); // reference count of the rule is increased by one
     }
     // other values = 0
     newS -> next = 0;

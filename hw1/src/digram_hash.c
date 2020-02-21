@@ -29,15 +29,13 @@ void init_digram_hash(void) {
 SYMBOL *digram_get(int v1, int v2) {
     int index = DIGRAM_HASH(v1, v2); // gives digram_table index
     while(*(digram_table + index) != NULL) { // diagram has to exist
-        if(*(digram_table + index) == NULL) { // first NULL entry
-            return NULL;
-        }
         if((*(digram_table + index)) == TOMBSTONE) { //TOMBSTONE
             return NULL;
         }
+
         if(((*(digram_table + index)) -> value) == v1
             && ((*(digram_table + index)) -> next -> value) == v2) {
-            return *(digram_table + index);
+            return *(digram_table + index); // found digram
         }
 
         index++;
@@ -71,7 +69,7 @@ SYMBOL *digram_get(int v1, int v2) {
 int digram_delete(SYMBOL *digram) {
     int i = DIGRAM_HASH(digram -> value, digram -> next -> value);
     while(*(digram_table + i) != NULL) { // diagram has to exist
-        if(*(digram_table + i) == digram) { // found
+        if((*(digram_table + i) == digram) && ((((*(digram_table + i))->next) == (digram->next)))) { // found
             *(digram_table + i) = TOMBSTONE; // delete
                 return 0; // successful deletion
         }
@@ -94,27 +92,26 @@ int digram_delete(SYMBOL *digram) {
  * table being full or the given digram not being well-formed.
  */
 int digram_put(SYMBOL *digram) {
-    // insertion
     // digram not well-formed
     if(digram -> next == NULL) {
         return -1;
     }
     // digram already exists
-    if(digram_get(digram->value, digram->next->value)) {
+    if(digram_get(digram->value, digram->next->value) != NULL) {
         return 1;
     }
 
+    int end = DIGRAM_HASH(digram->value, digram->next->value);
     int i = DIGRAM_HASH(digram->value, digram->next->value);
-    while(*(digram_table + i) != NULL) { // diagram has to exist
-        if((*(digram_table + i) == NULL) || (*(digram_table + i) == TOMBSTONE)) { // vacant entry
-            *(digram_table + i) = digram; // insert
-            return 0;
-        }
+    while(*(digram_table + i) != NULL && (*(digram_table + i) != TOMBSTONE)) {
         i++;
         if(i==MAX_DIGRAMS) {
             i = 0;
         }
+        if(i==end) {
+            return -1; // hash table full
+        }
     }
-    // hash table full
-    return -1;
+    *(digram_table + i) = digram; // insert
+    return 0;
 }

@@ -158,6 +158,70 @@ int value_helper(int ai1, int ai2) {
     return -1;
 }
 
+int utf8_conversion(int c, FILE *out, int *bw) {
+    if(c>=0 && c <= 0x7f) {
+        fputc(c, out);
+        (*bw)++;
+        return 0;
+    } else if (c>=0x80 && c <= 0x7ff) {
+        int temp = 0;
+        temp = c >> 6;
+        temp = temp | 0xc0; // append 110 to front
+        fputc(temp, out);
+        // continuation
+        temp = c & 0x3f;
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        (*bw)+= 2;
+        return 0;
+    } else if (c>=0x800 && c <= 0x7fff) {
+        int temp = 0;
+        temp = c >> 12;
+        temp = temp | 0xe0; // append 111 to front
+        fputc(temp, out);
+        // continuation
+        temp = (c >> 6) & 0x3f; // middle 6 bits :3
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        (*bw)+= 3;
+        return 0;
+    } else if (c>=0x8000 && c <= 0xffff) {
+        int temp = 0;
+        temp = c >> 12;
+        temp = temp | 0xe0; // append 111 to front
+        fputc(temp, out);
+        // continuation
+        temp = (c >> 6) & 0x3f; // middle 6 bits :3
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        (*bw)+= 3;
+        return 0;
+    } else if (c>=0x10000 && c <= 0x10ffff) {
+        int temp = 0;
+        temp = c >> 18;
+        temp = temp | 0xf0; // append 11110 to front
+        fputc(temp, out);
+
+        // continuation
+        temp = (c >> 12) & 0x3f; // middle 6 bits :3
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        temp = (c >> 6) & 0x3f; // middle 6 bits :3
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        temp = temp | 0x80; // append 10 to front
+        fputc(temp, out);
+        (*bw)+= 4;
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
 /**
  * Helper function for getting the value a continuation byte.
  *
@@ -221,7 +285,7 @@ int expand(SYMBOL *as, FILE *af) {
 int compress(FILE *in, FILE *out, int bsize) {
     // output starts with SOT
     fputc(0x81, out);
-    bsize*=1024;
+
     int c;
     int bytes_read_num = 0;
     int bytes_written_num = 1;
@@ -238,44 +302,55 @@ int compress(FILE *in, FILE *out, int bsize) {
         }
         ++bytes_read_num;
 
-
         // Sequitur algorithm :
         SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
         insert_after(main_rule -> prev, sym);
-        if(sym -> prev != main_rule) { // diagram = 2 symbols
+        if(sym -> prev != main_rule) { // diagram = 2 symbols /////////////////////////
             check_digram(sym -> prev);
         }
 
-        if(bytes_read_num == bsize-1) { // reached end of block
-            // convert to UTF-8
-            // print to output
-            // RD
-            // fputc(0x85, out);
-            for(int i =0; i<MAX_DIGRAMS; i++){
-                printf("%p\n", *(digram_table+i));
-            }
-
-            // EOB
-            fputc(0x84, out);
+        if(bytes_read_num == bsize) { // reached end of block EOB
+            // convert to UTF-8 and print to output
+            SYMBOL *tempR = main_rule;
+            do {
+                SYMBOL *tempS = tempR;
+                do {
+                    utf8_conversion(tempS->value, out, &bytes_written_num);
+                    tempS = tempS -> next;
+                } while(tempS != tempR);
+                tempR = tempR -> nextr;
+                if(tempR == main_rule) {
+                    // EOB
+                    fputc(0x84, out);
+                } else {
+                    // RD
+                    fputc(0x85,out);
+                }
+                bytes_written_num++;
+            } while(tempR != main_rule);
             bytes_read_num = 0;
-            bytes_written_num++;
         }
-
-
     }
-    // EOF
-    if(bytes_read_num == 0) { // empty file
-        fputc(0x81, out); // SOT
-    } else {
-        // less than bsize but EOF == EOB
-        // Sequitur algorithm:
-        SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
-        insert_after(main_rule->prev, sym);
-        if(sym -> prev != main_rule) {
-            check_digram(sym);
-        }
-        bytes_written_num++;
-        fputc(0x84, out);
+    //EOF
+    if(bytes_read_num > 0) {
+        SYMBOL *tempR = main_rule;
+        do {
+            SYMBOL *tempS = tempR;
+            do {
+                utf8_conversion(tempS->value, out, &bytes_written_num);
+                tempS = tempS -> next;
+            } while(tempS != tempR);
+            tempR = tempR -> nextr;
+            if(tempR == main_rule) {
+                // EOB
+                fputc(0x84, out);
+            } else {
+                // RD
+                fputc(0x85,out);
+            }
+            bytes_written_num++;
+        } while(tempR != main_rule);
+        //bytes_read_num = 0;
     }
     // EOT
     fputc(0x82, out);
