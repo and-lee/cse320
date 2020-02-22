@@ -290,14 +290,13 @@ int compress(FILE *in, FILE *out, int bsize) {
     int bytes_read_num = 0;
     int bytes_written_num = 1;
     while ((c = fgetc(in)) != EOF) {
-
         // SOB
         if(bytes_read_num == 0) {
             fputc(0x83, out);
             init_symbols();
             init_rules();
             init_digram_hash();
-            SYMBOL * newR = new_rule(next_nonterminal_value++);
+            SYMBOL *newR = new_rule(next_nonterminal_value++);
             add_rule(newR);
             bytes_written_num++;
         }
