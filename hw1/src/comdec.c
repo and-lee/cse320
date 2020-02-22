@@ -309,6 +309,7 @@ int compress(FILE *in, FILE *out, int bsize) {
             check_digram(sym -> prev);
         }
 
+//debug("%d", bytes_read_num);
         if(bytes_read_num == bsize) { // reached end of block EOB
             // convert to UTF-8 and print to output
             SYMBOL *tempR = main_rule;

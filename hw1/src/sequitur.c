@@ -63,13 +63,6 @@ static void join_symbols(SYMBOL *this, SYMBOL *next) {
     next->prev = this;
 }
 
-/*
- * This file is a stub for code that I have provided for you, but you need
- * to "unlock" it.  When you successfully complete the decompression part
- * of the assignment, use it to decompress the file ../rsrc/sequitur.c.seq
- * and replace this stub with the output of the decompression.
- */
-
 /**
  * Insert a new symbol after a specified symbol, handling any digram deletions
  * that result.
