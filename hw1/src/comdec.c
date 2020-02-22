@@ -306,7 +306,7 @@ int compress(FILE *in, FILE *out, int bsize) {
         // Sequitur algorithm :
         SYMBOL *sym = new_symbol(c, NULL); // *rule = NULL for terminals
         insert_after(main_rule -> prev, sym);
-        if(sym -> prev != main_rule) { // diagram = 2 symbols /////////////////////////
+        if(sym -> prev != main_rule) { // diagram = 2 symbols ////
             check_digram(sym -> prev);
         }
 
