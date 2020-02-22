@@ -290,6 +290,7 @@ int compress(FILE *in, FILE *out, int bsize) {
     int bytes_read_num = 0;
     int bytes_written_num = 1;
     while ((c = fgetc(in)) != EOF) {
+
         // SOB
         if(bytes_read_num == 0) {
             fputc(0x83, out);
@@ -314,10 +315,10 @@ int compress(FILE *in, FILE *out, int bsize) {
             SYMBOL *tempR = main_rule;
             do {
                 SYMBOL *tempS = tempR;
-                do {
-                    utf8_conversion(tempS->value, out, &bytes_written_num);
-                    tempS = tempS -> next;
-                } while(tempS != tempR);
+                    do {
+                        utf8_conversion(tempS->value, out, &bytes_written_num);
+                        tempS = tempS -> next;
+                    } while(tempS != tempR);
                 tempR = tempR -> nextr;
                 if(tempR == main_rule) {
                     // EOB
@@ -336,10 +337,10 @@ int compress(FILE *in, FILE *out, int bsize) {
         SYMBOL *tempR = main_rule;
         do {
             SYMBOL *tempS = tempR;
-            do {
-                utf8_conversion(tempS->value, out, &bytes_written_num);
-                tempS = tempS -> next;
-            } while(tempS != tempR);
+                do {
+                    utf8_conversion(tempS->value, out, &bytes_written_num);
+                    tempS = tempS -> next;
+                } while(tempS != tempR);
             tempR = tempR -> nextr;
             if(tempR == main_rule) {
                 // EOB
