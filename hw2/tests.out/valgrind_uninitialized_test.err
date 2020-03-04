@@ -1,0 +1,68 @@
+==8684== Memcheck, a memory error detector
+==8684== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==8684== Using Valgrind-3.13.0 and LibVEX; rerun with -h for copyright info
+==8684== Command: bin/vtree -q tests/rsrc/test_tree
+==8684== 
+==8684== Invalid write of size 8
+==8684==    at 0x4C367E3: memmove (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==8684==    by 0x109436: down (vtree.c:281)
+==8684==    by 0x109B86: get_data (vtree.c:477)
+==8684==    by 0x10A117: vtree_main (vtree.c:601)
+==8684==    by 0x10A1D9: main (main.c:10)
+==8684==  Address 0x52360f8 is 0 bytes after a block of size 8 alloc'd
+==8684==    at 0x4C2FB0F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==8684==    by 0x109411: down (vtree.c:280)
+==8684==    by 0x109B86: get_data (vtree.c:477)
+==8684==    by 0x10A117: vtree_main (vtree.c:601)
+==8684==    by 0x10A1D9: main (main.c:10)
+==8684== 
+
+valgrind: m_mallocfree.c:307 (get_bszB_as_is): Assertion 'bszB_lo == bszB_hi' failed.
+valgrind: Heap block lo/hi size mismatch: lo = 80, hi = 288230574492221464.
+This is probably caused by your program erroneously writing past the
+end of a heap block and corrupting heap metadata.  If you fix any
+invalid writes reported by Memcheck, this assertion failure will
+probably go away.  Please try that before reporting this as a bug.
+
+
+host stacktrace:
+==8684==    at 0x580441BA: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x580442D4: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x58044459: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x58052FC0: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x5803CECA: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x5803B5D3: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x5803FC9D: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x5803A8CB: ??? (in /usr/lib/valgrind/memcheck-amd64-linux)
+==8684==    by 0x1002D5468D: ???
+==8684==    by 0x1002CA9F2F: ???
+==8684==    by 0x1C0F: ???
+==8684==    by 0x100200837F: ???
+==8684==    by 0x1002CA9F17: ???
+==8684==    by 0x1002CA9F2F: ???
+==8684==    by 0x1108A: ???
+==8684==    by 0x1002D545E7: ???
+==8684==    by 0x1554C: ???
+
+sched status:
+  running_tid=1
+
+Thread 1: status = VgTs_Runnable (lwpid 8684)
+==8684==    at 0x109445: down (vtree.c:282)
+==8684==    by 0x109B86: get_data (vtree.c:477)
+==8684==    by 0x10A117: vtree_main (vtree.c:601)
+==8684==    by 0x10A1D9: main (main.c:10)
+
+
+Note: see also the FAQ in the source distribution.
+It contains workarounds to several common problems.
+In particular, if Valgrind aborted or crashed after
+identifying problems in your program, there's a good chance
+that fixing those problems will prevent Valgrind aborting or
+crashing, especially if it happened in m_mallocfree.c.
+
+If that doesn't help, please report this bug to: www.valgrind.org
+
+In the bug report, send all the above text, the valgrind
+version, and what OS and version you are using.  Thanks.
+
