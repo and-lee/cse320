@@ -63,6 +63,7 @@
 #ifdef LINUX
 	#include <stdlib.h>
 	#include <unistd.h>
+    #include <getopt.h>
 #endif
 
 #include "customize.h"
@@ -509,9 +510,23 @@ int	user_file_list_supplied = 0;
 
 	Program = *argv;		/* save our name for error messages */
 
+    int option_index = 0;
+    static struct option long_options[] = {
+        {"duplicates", no_argument, 0, 'd'},
+        {"floating-column-widths", no_argument, 0, 'f'},
+        {"height", required_argument, 0, 'h'},
+        {"inodes", no_argument, 0, 'i'},
+        {"sort-directories", no_argument, 0, 'o'},
+        {"totals", no_argument, 0, 't'},
+        {"quick-display", no_argument, 0, 'q'},
+        {"visual-display", no_argument, 0, 'v'},
+        {"version", no_argument, 0, 'V'},
+        {0, 0,  0,  0}
+    };
+
     /* Pick up options from command line */
 
-	while ((option = getopt(argc, argv, "dfh:iostqvV")) != EOF) {
+	while ((option = getopt_long(argc, argv, "dfh:iostqvV", long_options, &option_index)) != EOF) {
 		switch (option) {
 			case 'f':	floating = TRUE; break;
 			case 'h':	depth = atoi(optarg);
