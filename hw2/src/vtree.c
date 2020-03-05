@@ -294,10 +294,11 @@ tail = NULL;
 				/* screwy, inefficient, bubble sort	*/
 				/* but it works				*/
 	if (sort) {
+        tmp_RD = head;
 		while (tmp_RD) {
 			tmp1_RD = tmp_RD->fptr;
 			while (tmp1_RD) {
-				if (NAME(tmp_RD->entry) > NAME(tmp1_RD->entry)) {
+				if (strcmp(NAME(tmp_RD->entry),NAME(tmp1_RD->entry))>0) {
 					/* swap the two */
 					memcpy(&tmp_entry, &tmp_RD->entry, sizeof(tmp_entry));
 					memcpy(&tmp_RD->entry, &tmp1_RD->entry, sizeof(tmp_entry));
