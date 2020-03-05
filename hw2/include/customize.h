@@ -24,8 +24,7 @@
  /* reading directories.  If you've put this file somewhere */
  /* else, edit the next line. */
 
-//#	include		<sys/dirent.h>
-#include <dirent.h>
+#	include		<sys/dirent.h>
 
 #	define	OPEN	struct direct
 #	define	READ	struct dirent

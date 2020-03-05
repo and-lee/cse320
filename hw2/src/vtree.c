@@ -76,6 +76,11 @@
 #define SAME		0	/* for strcmp */
 #define BLOCKSIZE	512	/* size of a disk block */
 
+/* 514 block to 1024 */
+#define K(x)        (x/2)   /* convert stat(2) blocks into
+                             * k's. On my machine, a block
+                             * is 512 bytes. */
+
 #define	TRUE	1
 #define	FALSE	0
 #define	V_CHAR	"|"	/*	Vertical character	*/
@@ -326,6 +331,7 @@ tail = NULL;
 
 		if (cur_depth<depth) {
 			if (cnt_inodes) printf("   %d",inodes);
+            //sizes= stb.st_blocks;
 			printf(" : %ld\n",sizes);
 			total_sizes += sizes;
 			total_inodes += inodes;
@@ -398,10 +404,13 @@ tail = NULL;
 
 #ifdef	MEMORY_BASED
 				/* free the allocated memory */
+    struct RD_list *nxt_RD = NULL;
 	tmp_RD = head;
 	while (tmp_RD) {
+        nxt_RD = tmp_RD->fptr;
 		free(tmp_RD);
-		tmp_RD = tmp_RD->fptr;
+		//tmp_RD = tmp_RD->fptr;
+        tmp_RD = nxt_RD;
 	}
 #endif
 
@@ -471,8 +480,11 @@ void get_data(char *path, int cont) {
 /* struct	stat	stb; */
 
 	if (cont) {
-		if (is_directory(path))
+		if (is_directory(path)) {
+            inodes++; // count itself
+            sizes+= K(stb.st_blocks);
 			down(path);
+        }
 	}
 	else {
 		if (is_directory(path)) return;
@@ -482,7 +494,7 @@ void get_data(char *path, int cont) {
 		if ( (h_enter(stb.st_dev, stb.st_ino) == OLD) && (!duplicates) )
 			return;
 		inodes++;
-		sizes+= stb.st_blocks;
+		sizes+= K(stb.st_blocks);
 	}
 } /* get_data */
 
@@ -603,7 +615,7 @@ int	user_file_list_supplied = 0;
 
 	if (sw_summary) {
 		printf("\n\nTotal space used: %ld\n",total_sizes);
-		if (cnt_inodes) printf("Total inodes: %d\n",inodes);
+		if (cnt_inodes) printf("Total inodes: %d\n",total_inodes);
 	}
 
 #ifdef HSTATS
