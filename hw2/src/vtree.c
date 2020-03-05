@@ -276,7 +276,7 @@ tail = NULL;
  		    ( strcmp(NAME(*file), "..") != SAME &&
 		     strcmp(NAME(*file), ".") != SAME &&
 		     chk_4_dir(NAME(*file)) ) ) {
-			tmp_RD = (struct RD_list *) malloc(sizeof(struct RD_list *));
+			tmp_RD = (struct RD_list *) malloc(sizeof(struct RD_list));
 			memcpy(&tmp_RD->entry, file, sizeof(tmp_entry));
 			tmp_RD->bptr = head;
 			tmp_RD->fptr = NULL;
@@ -429,7 +429,7 @@ tail = NULL;
 	cur_depth--;
 
 	chdir(cwd);			/* go back where we were */
-
+    closedir(dp); //close file
 
 } /* down */
 

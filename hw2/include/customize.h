@@ -4,8 +4,6 @@
 */
 
 #define NAMELEN	512		/* max size of a full pathname */
-//OPEN FILE;
-//READ struct;
 
 #ifdef BSD
 #	include		<sys/dir.h>
@@ -55,6 +53,3 @@
 #if !(defined(BSD) || !defined(SYS_V) || !defined(SYS_III) || !defined(SCO_XENIX))
 "This is an Error"
 #endif
-
-//OPEN *opendir(const char *name);
-//READ *readdir(OPEN *drip);
