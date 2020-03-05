@@ -60,8 +60,11 @@
 #include <string.h>
 #endif
 
-#include <stdlib.h>
-#include <unistd.h>
+#ifdef LINUX
+	#include <stdlib.h>
+	#include <unistd.h>
+#endif
+
 #include "customize.h"
 #include "hash.h"
 
@@ -72,10 +75,6 @@
 
 #define SAME		0	/* for strcmp */
 #define BLOCKSIZE	512	/* size of a disk block */
-
-#define K(x)		((x + 1023)/1024)	/* convert stat(2) blocks into
-					 * k's.  On my machine, a block
-					 * is 512 bytes. */
 
 #define	TRUE	1
 #define	FALSE	0
@@ -138,9 +137,9 @@ static void	down(char *subdir);
 /*
 ** Find the last field of a string.
 */
-char *lastfield(p,c)
-char *p;	/* Null-terminated string to scan */
-int   c;	/* Separator char, usually '/' */
+char *lastfield(char *p, int c)
+/* Null-terminated string to scan */
+/* Separator char, usually '/' */
 {
 char *r;
 
@@ -168,7 +167,6 @@ void down(char *subdir) {
 OPEN	*dp;			/* stream from a directory */
 OPEN	*opendir ();
 char	cwd[NAMELEN], tmp[NAMELEN];
-//char	*sptr;
 READ	*file;			/* directory entry */
 READ	*readdir ();
 int	i, x;
@@ -177,7 +175,9 @@ int	i, x;
 #ifdef	MEMORY_BASED
 struct RD_list	*head, *tail, *tmp_RD, *tmp1_RD;		/* head and tail of directory list */
 struct RD_list	sz;
-READ tmp_entry; //
+READ tmp_entry;
+head = NULL;
+tail = NULL;
 #endif
 
 	if ( (cur_depth == depth) && (!sum) )
@@ -469,7 +469,6 @@ int is_directory(char *path) {
 
 void get_data(char *path, int cont) {
 /* struct	stat	stb; */
-//int		i;
 
 	if (cont) {
 		if (is_directory(path))
@@ -483,7 +482,7 @@ void get_data(char *path, int cont) {
 		if ( (h_enter(stb.st_dev, stb.st_ino) == OLD) && (!duplicates) )
 			return;
 		inodes++;
-		sizes+= K(stb.st_blocks);
+		sizes+= stb.st_blocks;
 	}
 } /* get_data */
 
@@ -491,7 +490,6 @@ void get_data(char *path, int cont) {
 
 int vtree_main(int argc, char *argv[]) {
 int	i,
-//	j,
 	err = FALSE;
 int	option;
 int	user_file_list_supplied = 0;

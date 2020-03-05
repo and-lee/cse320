@@ -8,7 +8,6 @@
  *	alternative.
  */
 #include <sys/types.h>
-#include "customize.h"
 #define NAMELENGTH	14
 #ifdef SYS_III
     FILE    *opendir(name)  { return (fopen(name,"r") ); }
@@ -32,7 +31,7 @@ struct direct {         /* What these routines return. */
       * Read a directory, returning the next (non-empty) slot.
       */
 
-#if defined (SYS_III) || defined(BSD) || defined(SYS_V) || defined(SCO_XENIX)
+#ifdef SYS_III
     READ *readdir(OPEN *dp) {
         static READ direct;
 
