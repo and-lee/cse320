@@ -483,7 +483,7 @@ void get_data(char *path, int cont) {
 		if ( (h_enter(stb.st_dev, stb.st_ino) == OLD) && (!duplicates) )
 			return;
 		inodes++;
-		sizes+= K(stb.st_size);
+		sizes+= K(stb.st_blocks);
 	}
 } /* get_data */
 

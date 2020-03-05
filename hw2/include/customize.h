@@ -4,13 +4,8 @@
 */
 
 #define NAMELEN	512		/* max size of a full pathname */
-#   include <dirent.h>
-#   define  OPEN    DIR
-#   define  READ    struct dirent
-#   define  NAME(x) ((x).d_name)
-#   define  INO(x)  ((x).d_ino)
-OPEN *opendir(const char *name);
-READ *readdir(OPEN *drip);
+//OPEN FILE;
+//READ struct;
 
 #ifdef BSD
 #	include		<sys/dir.h>
@@ -31,7 +26,8 @@ READ *readdir(OPEN *drip);
  /* reading directories.  If you've put this file somewhere */
  /* else, edit the next line. */
 
-#	include		<sys/dirent.h>
+//#	include		<sys/dirent.h>
+#include <dirent.h>
 
 #	define	OPEN	struct direct
 #	define	READ	struct dirent
@@ -59,3 +55,6 @@ READ *readdir(OPEN *drip);
 #if !(defined(BSD) || !defined(SYS_V) || !defined(SYS_III) || !defined(SCO_XENIX))
 "This is an Error"
 #endif
+
+//OPEN *opendir(const char *name);
+//READ *readdir(OPEN *drip);

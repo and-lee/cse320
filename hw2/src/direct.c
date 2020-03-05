@@ -10,17 +10,29 @@
 #include <sys/types.h>
 #include "customize.h"
 #define NAMELENGTH	14
-#if defined(SYS_III) || defined(BSD) || defined(SYS_V) || defined(SCO_XENIX) //def SYS_III
+#ifdef SYS_III
+    FILE    *opendir(name)  { return (fopen(name,"r") ); }
+#else
+	#define opendir(name)	fopen(name, "r")
+#endif
+#define closedir(fp)	fclose(fp)
+
+struct dir_entry {		/* What the system uses internally. */
+    ino_t           d_ino;
+    char            d_name[NAMELENGTH];
+};
+
+struct direct {         /* What these routines return. */
+    ino_t           d_ino;
+    char            d_name[NAMELENGTH];
+    char            terminator;
+};
+
      /*
       * Read a directory, returning the next (non-empty) slot.
       */
 
-    struct direct {         /* What these routines return. */
-        ino_t           d_ino;
-        char            d_name[NAMELENGTH];
-        char            terminator;
-    };
-
+#if defined (SYS_III) || defined(BSD) || defined(SYS_V) || defined(SCO_XENIX)
     READ *readdir(OPEN *dp) {
         static READ direct;
 
@@ -34,13 +46,4 @@
 
         return (READ *) NULL;
     }
-    FILE    *opendir(name)  { return (fopen(name,"r") ); }
-#else
-	#define opendir(name)	fopen(name, "r")
 #endif
-#define closedir(fp)	fclose(fp)
-
-struct dir_entry {		/* What the system uses internally. */
-    ino_t           d_ino;
-    char            d_name[NAMELENGTH];
-};
