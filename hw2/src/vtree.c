@@ -510,6 +510,7 @@ int	user_file_list_supplied = 0;
 
 	Program = *argv;		/* save our name for error messages */
 
+#ifdef LINUX
     int option_index = 0;
     static struct option long_options[] = {
         {"duplicates", no_argument, 0, 'd'},
@@ -524,9 +525,11 @@ int	user_file_list_supplied = 0;
         {0, 0,  0,  0}
     };
 
-    /* Pick up options from command line */
-
-	while ((option = getopt_long(argc, argv, "dfh:iostqvV", long_options, &option_index)) != EOF) {
+    while ((option = getopt_long(argc, argv, "dfh:iostqvV", long_options, &option_index)) != EOF) {
+#else
+        /* Pick up options from command line */
+	while ((option = getopt(argc, argv, "dfh:iostqvV")) != EOF) {
+#endif
 		switch (option) {
 			case 'f':	floating = TRUE; break;
 			case 'h':	depth = atoi(optarg);
@@ -542,7 +545,10 @@ int	user_file_list_supplied = 0;
 					break;
 			case 'i':	cnt_inodes = TRUE;
 					break;
-			case 'o':	sort = TRUE; break;
+            #ifdef MEMORY_BASED
+			case 'o':	sort = TRUE;
+                    break;
+            #endif
 			case 's':	sum = TRUE;
 					break;
 			case 't':	sw_summary = TRUE;
@@ -559,12 +565,18 @@ int	user_file_list_supplied = 0;
 			default:	err = TRUE;
 		}
 		if (err) {
-			fprintf(stderr,"%s: [ -d ] [ -h # ] [ -i ] [ -o ] [ -s ] [ -q ] [ -v ] [ -V ]\n",Program);
+            #ifdef MEMORY_BASED
+            fprintf(stderr,"%s: [ -d ] [ -h # ] [ -i ] [ -o ] [ -s ] [ -q ] [ -v ] [ -V ]\n",Program);
+            #else
+            fprintf(stderr,"%s: [ -d ] [ -h # ] [ -i ] [ -s ] [ -q ] [ -v ] [ -V ]\n",Program);
+            #endif
 			fprintf(stderr,"	-d	count duplicate inodes\n");
 			fprintf(stderr,"	-f	floating column widths\n");
 			fprintf(stderr,"	-h #	height of tree to look at\n");
 			fprintf(stderr,"	-i	count inodes\n");
+            #ifdef MEMORY_BASED
 			fprintf(stderr,"	-o	sort directories before processing\n");
+            #endif
 			fprintf(stderr,"	-s	include subdirectories not shown due to -h option\n");
 			fprintf(stderr,"	-t	totals at the end\n");
 			fprintf(stderr,"	-q	quick display, no counts\n");
