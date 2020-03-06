@@ -517,18 +517,23 @@ int	user_file_list_supplied = 0;
         {"floating-column-widths", no_argument, 0, 'f'},
         {"height", required_argument, 0, 'h'},
         {"inodes", no_argument, 0, 'i'},
+        #ifdef MEMORY_BASED
         {"sort-directories", no_argument, 0, 'o'},
+        #endif
         {"totals", no_argument, 0, 't'},
         {"quick-display", no_argument, 0, 'q'},
         {"visual-display", no_argument, 0, 'v'},
         {"version", no_argument, 0, 'V'},
+        #ifdef LSTAT
+        {"no-follow-symlinks", no_argument, 0, 'l'},
+        #endif
         {0, 0,  0,  0}
     };
 
-    while ((option = getopt_long(argc, argv, "dfh:iostqvV", long_options, &option_index)) != EOF) {
+    while ((option = getopt_long(argc, argv, "dfh:iostqvVl", long_options, &option_index)) != EOF) {
 #else
         /* Pick up options from command line */
-	while ((option = getopt(argc, argv, "dfh:iostqvV")) != EOF) {
+	while ((option = getopt(argc, argv, "dfh:iostqvVl")) != EOF) {
 #endif
 		switch (option) {
 			case 'f':	floating = TRUE; break;
@@ -562,18 +567,29 @@ int	user_file_list_supplied = 0;
 					break;
 			case 'V':	version++;
 					break;
+            #ifdef LSTAT
+                case 'l':
+                    sw_follow_links = FALSE;
+                    break;
+            #endif
 			default:	err = TRUE;
 		}
 		if (err) {
-            #ifdef MEMORY_BASED
-            fprintf(stderr,"%s: [ -d ] [ -h # ] [ -i ] [ -o ] [ -s ] [ -q ] [ -v ] [ -V ]\n",Program);
-            #else
-            fprintf(stderr,"%s: [ -d ] [ -h # ] [ -i ] [ -s ] [ -q ] [ -v ] [ -V ]\n",Program);
+            fprintf(stderr,"%s: [ -d ] [ -h # ] [ -i ] ",Program);
+            #ifdef LSTAT
+            fprintf(stderr,"[ -l ] ");
             #endif
+            #ifdef MEMORY_BASED
+            fprintf(stderr,"[ -o ] ");
+            #endif
+            fprintf(stderr,"[ -s ] [ -q ] [ -v ] [ -V ]\n");
 			fprintf(stderr,"	-d	count duplicate inodes\n");
 			fprintf(stderr,"	-f	floating column widths\n");
 			fprintf(stderr,"	-h #	height of tree to look at\n");
 			fprintf(stderr,"	-i	count inodes\n");
+            #ifdef LSTAT
+            fprintf(stderr,"        -l      do not follow symbolic links\n");
+            #endif
             #ifdef MEMORY_BASED
 			fprintf(stderr,"	-o	sort directories before processing\n");
             #endif
