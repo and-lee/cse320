@@ -11,6 +11,14 @@
 
 #define M 64 // minimum size in bytes
 
+//helper functions
+void initialize_free_list() {
+    for(int i=0; i<NUM_FREE_LISTS; i++) {
+        sf_free_list_heads[i].body.links.next = &sf_free_list_heads[i];
+        sf_free_list_heads[i].body.links.prev = &sf_free_list_heads[i];
+    }
+}
+
 void *sf_malloc(size_t size) {
     if(size==0) {
         return NULL;
@@ -24,11 +32,15 @@ void *sf_malloc(size_t size) {
     // if heap is empty
     if(sf_mem_start()==sf_mem_end()) { // initial call
 
+        // {
         //initialize free lists: list is empty
-        for(int i=0; i<NUM_FREE_LISTS; i++) {
-            sf_free_list_heads[i].body.links.next = &sf_free_list_heads[i];
-            sf_free_list_heads[i].body.links.prev = &sf_free_list_heads[i];
-        }
+        initialize_free_list();
+        //for(int i=0; i<NUM_FREE_LISTS; i++) {
+        //    sf_free_list_heads[i].body.links.next = &sf_free_list_heads[i];
+        //    sf_free_list_heads[i].body.links.prev = &sf_free_list_heads[i];
+        //}
+        // }
+
 
         sf_mem_grow();
         // create prologue: header = [al: 1, sz:      64, pal: 1][PROLOGUE]
@@ -43,9 +55,15 @@ void *sf_malloc(size_t size) {
         wbp->header = (PAGE_SZ-((M-(sizeof(sf_header)+sizeof(sf_footer)))+M)-(2*sizeof(sf_header))) & BLOCK_SIZE_MASK; // set block_size to 3968
         //prologue header, epilogue header
         wbp->header |= PREV_BLOCK_ALLOCATED; //prev_alloc = 1
-        //wbp->body.links.next = (sf_block *)(sf_free_list_heads[NUM_FREE_LISTS].body.links.next);
-        printf("%s\n", "HULLO");
-        printf("%p\n", (sf_block *)(sf_free_list_heads[NUM_FREE_LISTS].body.links.next));
+
+        // insert into free list
+        // {
+        sf_block *prev_block = (sf_block *)&sf_free_list_heads[NUM_FREE_LISTS-1];
+        wbp->body.links.next = prev_block;
+        prev_block->body.links.next = wbp;
+        wbp->body.links.prev = prev_block;
+        wbp->body.links.next->body.links.prev = wbp;
+        // }
 
         // create epilogue
         bp = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
