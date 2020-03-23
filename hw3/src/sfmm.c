@@ -11,6 +11,7 @@
 #include <errno.h>
 
 #define M 64 // minimum size in bytes
+#include <limits.h>
 
 //helper functions
 void initialize_free_lists() {
@@ -49,22 +50,35 @@ sf_header create_header(size_t size, long int prev_alloc, long int alloc) {
     sf_header header = ((size&BLOCK_SIZE_MASK)|(prev_alloc)|(alloc));
     return header;
 }
+sf_block *get_free_list(sf_block *block) {
+    int fib[NUM_FREE_LISTS] = {0, M, 2*M, 3*M, 5*M, 8*M, 13*M, 21*M, 34*M, INT_MAX};
+    long int size = get_block_size(block);
+    for(int index=0; index<NUM_FREE_LISTS-1; index++) {
+        if(size>fib[index] && size<=fib[index+1]) {
+            return &sf_free_list_heads[index+1];
+        }
+    }
+    return NULL;
+}
 sf_block *place_block(void * address, sf_header header) {
     sf_block *block = (sf_block*)(address);
     block->header = header;
-    if(get_alloc_bit(block)) {
-        //insert_free_list(block);
+    if(get_alloc_bit(block) == 0) { // add to free list
+        insert_free_list(get_free_list(block), block);
     }
     return block;
 }
-//sf_block *get_free_list(sf_block *block) {
-    //size
-//}
 sf_block *split_block(sf_block *block, size_t size) {
-    //split without creating a splinter (<=64 bytes)
-    // if split free blocksize <64, leave
-        // datasize = entire.
-        // insert
+    long int free_block_size = get_block_size(block) - size;
+    //split without creating a splinter (<=64 bytes) : 'over alloc'
+    if(free_block_size<M) { // splinter (splinter size = < min size)
+        block->header |= THIS_BLOCK_ALLOCATED; // switch to alloc
+        //delete from free list
+        delete_free_list(&sf_free_list_heads[NUM_FREE_LISTS-1], block);
+        return block;
+    }
+    //remove allocated block from free list
+    delete_free_list(get_free_list(block), block);
 
     //upper part = remainder [al: 0, sz:       get_block_size(block) - size, pal: 1]
     sf_block *free_block = place_block((char *)(block) + size, create_header(get_block_size(block) - size, PREV_BLOCK_ALLOCATED, 0));
@@ -75,9 +89,10 @@ sf_block *split_block(sf_block *block, size_t size) {
 
     free_block->prev_footer = data_block->header;
     get_next_block(free_block)->prev_footer = free_block->header;
+
     //insert remainer back into its size class
-    delete_free_list(&sf_free_list_heads[NUM_FREE_LISTS-1], data_block);//remove allocated block from free list
-    insert_free_list(&sf_free_list_heads[NUM_FREE_LISTS-2], free_block);
+    //insert_free_list(get_free_list(free_block), free_block);
+
     return data_block;
 }
 
@@ -106,7 +121,7 @@ void *sf_malloc(size_t size) {
         sf_block *wilderness = place_block((char *)(prologue)+M, create_header(PAGE_SZ-((M-(sizeof(sf_header)+sizeof(sf_footer)))+M)-(2*sizeof(sf_header)), PREV_BLOCK_ALLOCATED, 0));
         wilderness->prev_footer = prologue->header; // prologue footer = same as header
         // insert into free list ////////////////////////////////////
-        insert_free_list(&sf_free_list_heads[NUM_FREE_LISTS-1], wilderness);
+        //insert_free_list(&sf_free_list_heads[NUM_FREE_LISTS-1], wilderness);
 
         // create epilogue. (only need header, prev_footer) [al: 1, sz:       0, pal: 0]
         sf_block *epilogue = place_block(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)), create_header(0, 0, THIS_BLOCK_ALLOCATED));
@@ -130,7 +145,7 @@ void *sf_malloc(size_t size) {
                 split_block(found_block, block_size);
                 ///////////////////////////////////////////////////////
                 //success return pointer to of request to payload/valid regin of memory
-                //return data_block->body.payload;
+                //return split_block(found_block, block_size)->body.payload;
 
             }
 
