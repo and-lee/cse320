@@ -52,6 +52,8 @@ Test(sf_memsuite_student, malloc_an_int, .init = sf_mem_init, .fini = sf_mem_fin
 	cr_assert_not_null(x, "x is NULL!");
 
 	*x = 4;
+	printf("%s\n", "malloc an int");
+	sf_show_heap();
 
 	cr_assert(*x == 4, "sf_malloc failed to give proper space for an int!");
 
@@ -61,26 +63,33 @@ Test(sf_memsuite_student, malloc_an_int, .init = sf_mem_init, .fini = sf_mem_fin
 
 	cr_assert(sf_errno == 0, "sf_errno is not zero!");
 	cr_assert(sf_mem_start() + PAGE_SZ == sf_mem_end(), "Allocated more than necessary!");
+	printf("%s\n", "pass malloc an int");
 }
 
 Test(sf_memsuite_student, malloc_three_pages, .init = sf_mem_init, .fini = sf_mem_fini) {
 	sf_errno = 0;
 	// We want to allocate up to exactly three pages.
 	void *x = sf_malloc(3 * PAGE_SZ - ((1 << 6) - sizeof(sf_header)) - 64 - 2*sizeof(sf_header));
+	printf("%s\n", "malloc three pages");
+	sf_show_heap();
 
 	cr_assert_not_null(x, "x is NULL!");
 	assert_free_block_count(0, 0);
 	cr_assert(sf_errno == 0, "sf_errno is not 0!");
+	printf("%s\n", "pass malloc three pages");
 }
 
 Test(sf_memsuite_student, malloc_too_large, .init = sf_mem_init, .fini = sf_mem_fini) {
 	sf_errno = 0;
 	void *x = sf_malloc(PAGE_SZ << 16);
+	printf("%s\n", "malloc too large");
+	sf_show_heap();
 
 	cr_assert_null(x, "x is not NULL!");
 	assert_free_block_count(0, 1);
 	assert_free_block_count(65408, 1);
 	cr_assert(sf_errno == ENOMEM, "sf_errno is not ENOMEM!");
+	printf("%s\n", "pass malloc too large");
 }
 
 Test(sf_memsuite_student, free_quick, .init = sf_mem_init, .fini = sf_mem_fini) {
@@ -90,11 +99,14 @@ Test(sf_memsuite_student, free_quick, .init = sf_mem_init, .fini = sf_mem_fini) 
 	/* void *z = */ sf_malloc(1);
 
 	sf_free(y);
+	printf("%s\n", "free quick");
+	sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(64, 1);
 	assert_free_block_count(3776, 1);
 	cr_assert(sf_errno == 0, "sf_errno is not zero!");
+	printf("%s\n", "pass free quick");
 }
 
 Test(sf_memsuite_student, free_no_coalesce, .init = sf_mem_init, .fini = sf_mem_fini) {
@@ -104,11 +116,14 @@ Test(sf_memsuite_student, free_no_coalesce, .init = sf_mem_init, .fini = sf_mem_
 	/* void *z = */ sf_malloc(1);
 
 	sf_free(y);
+	printf("%s\n", "free no coalesce");
+	sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(256, 1);
 	assert_free_block_count(3584, 1);
 	cr_assert(sf_errno == 0, "sf_errno is not zero!");
+	printf("%s\n", "pass free no coalesce");
 }
 
 Test(sf_memsuite_student, free_coalesce, .init = sf_mem_init, .fini = sf_mem_fini) {
@@ -120,11 +135,14 @@ Test(sf_memsuite_student, free_coalesce, .init = sf_mem_init, .fini = sf_mem_fin
 
 	sf_free(y);
 	sf_free(x);
+	printf("%s\n", "free coalesce");
+	sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(576, 1);
 	assert_free_block_count(3264, 1);
 	cr_assert(sf_errno == 0, "sf_errno is not zero!");
+	printf("%s\n", "pass free coalesce");
 }
 
 Test(sf_memsuite_student, freelist, .init = sf_mem_init, .fini = sf_mem_fini) {
@@ -134,10 +152,12 @@ Test(sf_memsuite_student, freelist, .init = sf_mem_init, .fini = sf_mem_fini) {
 	/* void *x = */ sf_malloc(500);
 	void *y = sf_malloc(200);
 	/* void *z = */ sf_malloc(700);
-
+	//sf_show_heap();
 	sf_free(u);
 	sf_free(w);
 	sf_free(y);
+	printf("%s\n", "free list");
+	sf_show_heap();
 
 	assert_free_block_count(0, 4);
 	assert_free_block_count(256, 3);
@@ -151,6 +171,8 @@ Test(sf_memsuite_student, freelist, .init = sf_mem_init, .fini = sf_mem_fini) {
 	cr_assert_eq(bp, (char *)y - 2*sizeof(sf_header),
 		     "Wrong first block in free list %d: (found=%p, exp=%p)",
                      i, bp, (char *)y - 2*sizeof(sf_header));
+	printf("%s\n", "pass freelist");
+	sf_show_heap();
 }
 
 Test(sf_memsuite_student, realloc_larger_block, .init = sf_mem_init, .fini = sf_mem_fini) {
