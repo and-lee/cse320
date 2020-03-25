@@ -54,20 +54,47 @@ sf_header create_header(size_t size, long int prev_alloc, long int alloc) {
     sf_header header = ((size&BLOCK_SIZE_MASK)|(prev_alloc)|(alloc));
     return header;
 }
-sf_block *get_free_list(long int size) {
-    int fib[NUM_FREE_LISTS] = {0, M, 2*M, 3*M, 5*M, 8*M, 13*M, 21*M, 34*M, INT_MAX};
+sf_block *get_free_list(sf_block *block) {
+    sf_block *epilogue = (sf_block*)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
+    if(get_next_block(block) == epilogue) { // if = wildernes block
+        return &sf_free_list_heads[NUM_FREE_LISTS-1];
+    }
+    long int size = get_block_size(block);
+    /*int fib[NUM_FREE_LISTS] = {0, M, 2*M, 3*M, 5*M, 8*M, 13*M, 21*M, 34*M, INT_MAX};
     for(int index=0; index<NUM_FREE_LISTS-1; index++) {
         if(size>fib[index] && size<=fib[index+1]) {
-            return &sf_free_list_heads[index+1];
+            return &sf_free_list_heads[index-1];
         }
     }
+    */
+    if(size>0 && size<=M) {
+        return &sf_free_list_heads[0];
+    } else if(size>M && size<=2*M) {
+        return &sf_free_list_heads[1];
+    } else if(size>2*M && size<=3*M) {
+        return &sf_free_list_heads[2];
+    } else if(size>3*M && size<=5*M) {
+        return &sf_free_list_heads[3];
+    } else if(size>5*M && size<=8*M) {
+        return &sf_free_list_heads[4];
+    } else if(size>8*M && size<=13*M) {
+        return &sf_free_list_heads[5];
+    } else if(size>13*M && size<=21*M) {
+        return &sf_free_list_heads[6];
+    } else if(size>21*M && size<=34*M) {
+        return &sf_free_list_heads[7];
+    } else if(size>34*M) {
+        return &sf_free_list_heads[8];
+    }
+
+
     return NULL;
 }
 sf_block *place_block(void * address, sf_header header) {
     sf_block *block = (sf_block*)(address);
     block->header = header;
     if(get_alloc_bit(block) == 0) { // add to free list
-        insert_free_list(get_free_list(get_block_size(block)), block);
+        insert_free_list(get_free_list(block), block);
     }
     return block;
 }
@@ -99,13 +126,13 @@ sf_block *split_block(sf_block *block, size_t size) {
 }
 sf_block *coalesce_block(sf_block *first, sf_block *second) {
     // remove from free list
-    delete_free_list(second);
+    //delete_free_list(second);
 
     //combine into one block
     set_block_size(first, get_block_size(first)+get_block_size(second));
 
     //insert new coalesced block into list
-    insert_free_list(get_free_list(get_block_size(first)), first);
+    //insert_free_list(get_free_list(first), first);
     return first;
 }
 
@@ -150,16 +177,11 @@ void *sf_malloc(size_t size) {
     }
     block_size += padding;
 
-    //search for smallest free list to satisfy request size->end-2
-    sf_block *free_list = get_free_list(block_size);
-    while(free_list != &sf_free_list_heads[NUM_FREE_LISTS]) {
+    //search for smallest free list to satisfy request size->end-2 ////
+    for(int i =0; i<NUM_FREE_LISTS-1; i++) {
+        sf_block *free_list = &sf_free_list_heads[i]; ////
         sf_block *found_block = ((sf_block *)(free_list))->body.links.next; //head = sentinel
         while(found_block != free_list) { // search link list
-            /*
-            if(get_block_size(found_block) == block_size) { // exact size
-                return found_block->body.payload;
-            }
-            */
             if(get_block_size(found_block) >= block_size) { // block found
                 //success return pointer to of request to payload/valid regin of memory
                 return split_block(found_block, block_size)->body.payload;
@@ -168,7 +190,6 @@ void *sf_malloc(size_t size) {
             found_block = found_block->body.links.next;
         } //if no block found, continue to next size class
         // move to the next free list
-        free_list += 1;
     }
 
     // block not found - use wilderness block (if it exists)
@@ -192,31 +213,13 @@ void *sf_malloc(size_t size) {
             sf_errno = ENOMEM;
             return NULL;
         }
-        sf_block *temp = (sf_block *)((char *)ptr);
-        temp->header =  create_header(PAGE_SZ, 0, 0);
+        set_block_size(new_block, get_block_size(new_block)+PAGE_SZ);
 
-        // coalesce
-        //if(get_alloc_bit(new_wilderness) == 0) {
-            set_block_size(new_block, get_block_size(new_block)+get_block_size(temp));
-        //}
         // create new epilogue
         sf_block *new_epilogue = place_block(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)), create_header(0, 0, THIS_BLOCK_ALLOCATED));
         new_epilogue->prev_footer = new_block->header;
 
     }
-    //int new_block_size = pages*PAGE_SZ;
-    //set_block_size(epilogue, new_block_size);
-
-    /*// create new epilogue
-    sf_block *new_epilogue = place_block(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)), create_header(0, 0, THIS_BLOCK_ALLOCATED));
-    new_epilogue->prev_footer = new_block->header;
-
-    // coalesce newly allocated page with wildreness block preceding - if it exists
-    sf_block *new_wilderness = get_prev_block(epilogue);
-    if(get_alloc_bit(new_wilderness) == 0) {
-        set_block_size(new_wilderness, new_block_size+get_block_size(new_wilderness));
-    }
-    new_epilogue->prev_footer = new_wilderness->header; // free block, set footer*/
 
     // insert new wilderness block to the beginning of the last free list
     return split_block(new_block, block_size)->body.payload; // return pointer to allocated block
@@ -253,17 +256,19 @@ void sf_free(void *pp) {
     sf_block *next_block = get_next_block(block);
     sf_block *prev_block = get_prev_block(block);
     if(get_prev_alloc_bit(block) == 0) {
+        delete_free_list(prev_block);
         block = coalesce_block(prev_block, block);
     }
     if(get_alloc_bit(next_block) == 0) {
+        delete_free_list(next_block);
         block = coalesce_block(block, next_block);
-
     }
     //update footer
     get_next_block(block)->prev_footer = block->header;
 
     // insert block at the beginning of the free list of appropriate size class
-    insert_free_list(get_free_list(get_block_size(block)), block); // mainting free list
+    insert_free_list(get_free_list(block), block); // mainting free list
+
 
     //sf_show_heap();
     return;
