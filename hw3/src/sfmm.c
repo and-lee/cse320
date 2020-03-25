@@ -104,11 +104,14 @@ sf_block *place(void *address, sf_header b_header) {
     sf_block *next_block = get_next_block(block);
     sf_block *prev_block = get_prev_block(block);
     sf_block *epilogue = (sf_block*)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer))); ////
-    block->prev_footer = prev_block->header; // set this block's prev_ footer which is the footer of the previous block
-    next_block->prev_footer = block->header; // set block's footer
+    if(get_prev_alloc_bit(block) == 0) { // free block, set footer
+        block->prev_footer = prev_block->header;
+    }
+
     if(get_alloc_bit(block)) { // alloc = 1
         // set next block's prev_alloc = 1
         next_block->header |= PREV_BLOCK_ALLOCATED;
+
         // delete from free list (if it exists)
         if((to_delete_from_free_list)) { // block is now allocated
             delete_free_list(block);
@@ -116,6 +119,8 @@ sf_block *place(void *address, sf_header b_header) {
     } else { // alloc = 0
         // set next block's prev_alloc = 0
         next_block->header &= ~PREV_BLOCK_ALLOCATED;
+        next_block->prev_footer = block->header; // set block's footer
+
         // insert
         if(next_block == epilogue) {
             insert_free_list(&sf_free_list_heads[NUM_FREE_LISTS-1], block);
@@ -147,14 +152,18 @@ sf_block *split_block(sf_block *block, size_t size) {
     sf_block *data_block = place((char *)(block), create_header(size, PREV_BLOCK_ALLOCATED, THIS_BLOCK_ALLOCATED));
     return data_block;
 }
-
 sf_block *coalesce_block(sf_block *first, sf_block *second) {
-    if(get_alloc_bit(second) == 0) { // delete combining block from the free list
-        delete_free_list(second);
-    }
+    first = (sf_block *)(first);
+    second = (sf_block *)(second);
+
+    //if(get_alloc_bit(second) == 0) { // delete combining block from the free list
+        //delete_free_list(second);
+    //}
+    //place(first, create_header(get_block_size(first)+(get_block_size(second)+8), get_prev_alloc_bit(first), get_alloc_bit(first)));
+
     //combine into one block
     //set_block_size(first, get_block_size(first)+get_block_size(second));
-    return place(first, create_header(get_block_size(first)+get_block_size(second), get_prev_alloc_bit(first), get_alloc_bit(first)));
+    return first;
 }
 
 
@@ -320,7 +329,7 @@ void sf_free(void *pp) {
     // set alloc = 0
     // added into the free list, footers updated
     block = place((char *)(block), create_header(get_block_size(block), get_prev_alloc_bit(block), 0));
-/*
+
     // coalesce block with adjacent free blocks
     // determine size class for new coalesced free block
     sf_block *next_block = get_next_block(block);
@@ -331,7 +340,7 @@ void sf_free(void *pp) {
     if(get_alloc_bit(next_block) == 0) {
         coalesce_block(block, next_block);
     }
-*/
+
     return;
 }
 
