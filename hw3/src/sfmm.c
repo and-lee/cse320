@@ -156,13 +156,15 @@ sf_block *coalesce_block(sf_block *first, sf_block *second) {
     first = (sf_block *)(first);
     second = (sf_block *)(second);
 
-    //if(get_alloc_bit(second) == 0) { // delete combining block from the free list
-        //delete_free_list(second);
-    //}
-    //place(first, create_header(get_block_size(first)+(get_block_size(second)+8), get_prev_alloc_bit(first), get_alloc_bit(first)));
-
+    if(get_alloc_bit(second) == 0) { // delete combining block from the free list
+        delete_free_list(second);
+    }
+    if(get_alloc_bit(first) == 0) {
+        delete_free_list(first);
+    }
     //combine into one block
-    //set_block_size(first, get_block_size(first)+get_block_size(second));
+    place(first, create_header(get_block_size(first)+(get_block_size(second)), get_prev_alloc_bit(first), get_alloc_bit(first)));
+
     return first;
 }
 

@@ -96,8 +96,8 @@ Test(sf_memsuite_student, free_quick, .init = sf_mem_init, .fini = sf_mem_fini) 
 	/* void *z = */ sf_malloc(1);
 
 	sf_free(y);
-	printf("%s\n", "free quick");
-	sf_show_heap();
+	//printf("%s\n", "free quick");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(64, 1);
@@ -112,8 +112,8 @@ Test(sf_memsuite_student, free_no_coalesce, .init = sf_mem_init, .fini = sf_mem_
 	/* void *z = */ sf_malloc(1);
 
 	sf_free(y);
-	printf("%s\n", "free no coalesce");
-	sf_show_heap();
+	//printf("%s\n", "free no coalesce");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(256, 1);
@@ -130,8 +130,8 @@ Test(sf_memsuite_student, free_coalesce, .init = sf_mem_init, .fini = sf_mem_fin
 
 	sf_free(y);
 	sf_free(x);
-	printf("%s\n", "free coalesce");
-	sf_show_heap();
+	//printf("%s\n", "free coalesce");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(576, 1);
@@ -150,8 +150,8 @@ Test(sf_memsuite_student, freelist, .init = sf_mem_init, .fini = sf_mem_fini) {
 	sf_free(u);
 	sf_free(w);
 	sf_free(y);
-	printf("%s\n", "free list");
-	sf_show_heap();
+	//printf("%s\n", "free list");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 4);
 	assert_free_block_count(256, 3);
