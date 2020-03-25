@@ -152,7 +152,7 @@ Test(sf_memsuite_student, freelist, .init = sf_mem_init, .fini = sf_mem_fini) {
 	/* void *x = */ sf_malloc(500);
 	void *y = sf_malloc(200);
 	/* void *z = */ sf_malloc(700);
-	//sf_show_heap();
+
 	sf_free(u);
 	sf_free(w);
 	sf_free(y);
