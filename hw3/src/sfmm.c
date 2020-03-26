@@ -242,7 +242,6 @@ void *sf_malloc(size_t size) {
         }
         //coalesce
         set_block_size(new_block, get_block_size(new_block)+PAGE_SZ);
-
         // create new epilogue
         sf_block *new_epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
         new_epilogue->header = create_header(0, 0, THIS_BLOCK_ALLOCATED);
@@ -253,25 +252,25 @@ void *sf_malloc(size_t size) {
     return split_block(new_block, block_size)->body.payload; // return pointer to allocated block
 }
 
-
 void sf_free(void *pp) {
-    sf_block *block = (sf_block*)(((char *)pp)-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
-    //sf_block *prologue = (sf_block*)(sf_mem_start()+(M-(sizeof(sf_header)+sizeof(sf_footer)))); // pp = payload pointer
-    //sf_block *epilogue = (sf_block*)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
-
+    sf_block *block = (sf_block *)(((char *)pp)-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
+    sf_block *prologue = (sf_block*)(sf_mem_start()+(M-(sizeof(sf_header)+sizeof(sf_footer)))); // pp = payload pointer
+    sf_block *epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
+    printf("XXXX %p\n", ((char*)(&(block->header)))  );
+    printf("EEEE %p\n", (epilogue)   );
     // verify pointer
-    // invalid pointer
     if ((pp == NULL)
         || ((((long int)pp)%M) != 0)
         || (get_alloc_bit(block) == 0)
-        ////////////////////////////////////////////////////////////////////////////////////////////////////
-        //|| (((long int)&(block->header)) < ((long int)get_next_block(prologue))) || (((long int)&(block->header)) < ((long int)epilogue))
+        || (((char *)(&(block->header))) < ((char *)get_next_block(prologue)))
+        || (((char *)(&(block->header))) > ((char *)epilogue))
         || ((get_prev_alloc_bit(block) == 0) && (get_alloc_bit(get_prev_block(block)) != 0))
-        ) {
+        ) { // invalid pointer
         // pointer == NULL
         // pointer not alligned to 64-bytes
         // allocated bit in header = 0
-        // header is before the end of the prologue || after the beginning of the epilogue
+        // header is before the end of the prologue
+        // header is after the beginning of the epilogue
         // prev_alloc = 0 && alloc(previous block)!=0
         abort(); // exit program
     }
