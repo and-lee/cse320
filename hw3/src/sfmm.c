@@ -56,33 +56,37 @@ sf_header create_header(size_t size, long int prev_alloc, long int alloc) {
     sf_header header = ((size&BLOCK_SIZE_MASK)|(prev_alloc)|(alloc));
     return header;
 }
+int get_free_list_index(size_t size) {
+    if(size>0 && size<=M) {
+        return 0;
+    } else if(size>M && size<=2*M) {
+        return 1;
+    } else if(size>2*M && size<=3*M) {
+        return 2;
+    } else if(size>3*M && size<=5*M) {
+        return 3;
+    } else if(size>5*M && size<=8*M) {
+        return 4;
+    } else if(size>8*M && size<=13*M) {
+        return 5;
+    } else if(size>13*M && size<=21*M) {
+        return 6;
+    } else if(size>21*M && size<=34*M) {
+        return 7;
+    } else if(size>34*M) {
+        return 8;
+    }
+    return 9;
+}
 sf_block *get_free_list(sf_block *block) {
     block = (sf_block*)(block);
     sf_block *epilogue = (sf_block*)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
-    if(get_next_block(block) == epilogue) { // if = wildernes block
+    // if = wildernes block
+    if(get_next_block(block) == epilogue) {
         return &sf_free_list_heads[NUM_FREE_LISTS-1];
     }
     long int size = get_block_size(block);
-    if(size>0 && size<=M) {
-        return &sf_free_list_heads[0];
-    } else if(size>M && size<=2*M) {
-        return &sf_free_list_heads[1];
-    } else if(size>2*M && size<=3*M) {
-        return &sf_free_list_heads[2];
-    } else if(size>3*M && size<=5*M) {
-        return &sf_free_list_heads[3];
-    } else if(size>5*M && size<=8*M) {
-        return &sf_free_list_heads[4];
-    } else if(size>8*M && size<=13*M) {
-        return &sf_free_list_heads[5];
-    } else if(size>13*M && size<=21*M) {
-        return &sf_free_list_heads[6];
-    } else if(size>21*M && size<=34*M) {
-        return &sf_free_list_heads[7];
-    } else if(size>34*M) {
-        return &sf_free_list_heads[8];
-    }
-    return NULL;
+    return &sf_free_list_heads[get_free_list_index(size)];
 }
 sf_block *place(void *address, sf_header header) {
     // heap already exists and is initialized
@@ -99,7 +103,6 @@ sf_block *place(void *address, sf_header header) {
     if(get_alloc_bit(block)) { // alloc = 1
         // set next block's prev_alloc = 1
         next_block->header |= PREV_BLOCK_ALLOCATED;
-
         // delete from free list (if it exists)
         if((to_delete_from_free_list)) { // block is now allocated
             delete_free_list(block);
@@ -108,7 +111,6 @@ sf_block *place(void *address, sf_header header) {
         // set next block's prev_alloc = 0
         next_block->header &= ~PREV_BLOCK_ALLOCATED;
         next_block->prev_footer = block->header; // set block's footer
-
         // insert
         if(next_block == epilogue) {
             insert_free_list(&sf_free_list_heads[NUM_FREE_LISTS-1], block);
@@ -129,11 +131,8 @@ sf_block *split_block(sf_block *block, size_t size) {
         // alloc = 1
         return place((char *)(block), create_header(get_block_size(block), get_prev_alloc_bit(block), 1));
     }
-
     //upper part = remainder [al: 0, sz:       get_block_size(block) - size, pal: 1]
     place((char *)(block) + size, create_header(get_block_size(block) - size, PREV_BLOCK_ALLOCATED, 0)); // place checks if block is wilderness block
-
-
     //lower part = allocation request [al: 1, sz:       size, p.al: block.pal]
     sf_block *data_block = place((char *)(block), create_header(size, PREV_BLOCK_ALLOCATED, THIS_BLOCK_ALLOCATED));
     return data_block;
@@ -156,9 +155,8 @@ void *sf_malloc(size_t size) {
     if(size == 0) {
         return NULL;
     } // else size !=0
-
-    // if heap is empty, initialize heap
-    if(sf_mem_start()==sf_mem_end()) { // initial call
+    // initialize heap
+    if(sf_mem_start()==sf_mem_end()) { // initial call, if heap is empty
         //initialize free lists: list is empty
         initialize_free_lists();
 
@@ -195,35 +193,31 @@ void *sf_malloc(size_t size) {
     }
     block_size += remainder;
 
-
-
-
-
-
-
-
-    //search for smallest free list to satisfy request size->end ////
-    // block not found - use wilderness block (if it exists)
-    for(int i =0; i<NUM_FREE_LISTS; i++) {
-        sf_block *free_list = &sf_free_list_heads[i]; ////
+    //block placement
+    // free list searched starting from the list for the determined size class
+    sf_block *free_list = &sf_free_list_heads[get_free_list_index(size)];
+    while(free_list != &sf_free_list_heads[NUM_FREE_LISTS-1]) {
         sf_block *found_block = ((sf_block *)(free_list))->body.links.next; //head = sentinel
+        // first-fit policy : get first block in the list
         while(found_block != free_list) { // search link list
             if(get_block_size(found_block) >= block_size) { // block found
                 //success return pointer to of request to payload/valid regin of memory
                 return split_block(found_block, block_size)->body.payload;
             }
-            // move to next block in the free list
-            found_block = found_block->body.links.next;
-        } //if no block found, continue to next size class
-        // move to the next free list
+        }
+        //if no block found, continue to next size class
+        free_list += 1; // move to the next free list
     }
-
-
-
-
-
-
-
+    // block not found - use wilderness block (if it exists)
+    // exists when epilogue prev_alloc = 0
+    sf_block *epilogue = (sf_block*)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
+    // if = wildernes block
+    if(get_prev_alloc_bit(epilogue) == 0) { // wilderness exists
+        sf_block *wilderness = get_prev_block(epilogue);
+        if(get_block_size(wilderness) >= block_size) { // wilderness has enough space
+            return split_block(wilderness, block_size)->body.payload;
+        }
+    }
 
     // wilderness block does not exist || wilderness block is not big enough > create more space in memory
     // old epilogue = header block
