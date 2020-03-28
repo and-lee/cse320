@@ -120,23 +120,6 @@ sf_block *place(void *address, sf_header header) {
     }
     return block;
 }
-sf_block *split_block(sf_block *block, size_t size) {
-    block = (sf_block*)(block);
-    long int free_block_size = get_block_size(block) - size;
-    delete_free_list(block); // reassign
-
-    // split without creating a splinter (<=alignment) : 'over alloc'
-    // exact size. do not need to split. use entire block
-    if((free_block_size < M) || (free_block_size == 0)) {
-        // alloc = 1
-        return place((void *)(block), create_header(get_block_size(block), get_prev_alloc_bit(block), 1));
-    }
-    //upper part = remainder [al: 0, sz:       get_block_size(block) - size, pal: 1]
-    place((void *)(block) + size, create_header(get_block_size(block) - size, PREV_BLOCK_ALLOCATED, 0)); // place checks if block is wilderness block
-    //lower part = allocation request [al: 1, sz:       size, p.al: block.pal]
-    sf_block *data_block = place((void *)(block), create_header(size, PREV_BLOCK_ALLOCATED, THIS_BLOCK_ALLOCATED));
-    return data_block;
-}
 sf_block *coalesce_block(sf_block *first, sf_block *second) {
     first = (sf_block *)(first);
     second = (sf_block *)(second);
@@ -149,6 +132,54 @@ sf_block *coalesce_block(sf_block *first, sf_block *second) {
     //combine into one block
     place(first, create_header(get_block_size(first)+(get_block_size(second)), get_prev_alloc_bit(first), get_alloc_bit(first)));
     return first;
+}
+sf_block *split_block(sf_block *block, size_t size) {
+    block = (sf_block*)(block);
+    long int free_block_size = get_block_size(block) - size;
+    if(get_alloc_bit(block) == 0) {
+        sf_show_heap();
+        delete_free_list(block); // remove from free list (reassigned later)
+    }
+    // split without creating a splinter (<=alignment) : 'over alloc'
+    // exact size. do not need to split. use entire block
+    if((free_block_size < M) || (free_block_size == 0)) {
+        // alloc = 1
+        block->header |= THIS_BLOCK_ALLOCATED;
+        return block;
+        //return place((void *)(block), create_header(get_block_size(block), get_prev_alloc_bit(block), 1));
+    }
+    // split and assign blocks
+    //lower part = allocation request [al: 1, sz:       size, p.al: block.pal]
+    sf_block *data_block = place((void *)(block), create_header(size, PREV_BLOCK_ALLOCATED, THIS_BLOCK_ALLOCATED));
+    //upper part = remainder [al: 0, sz:       get_block_size(block) - size, pal: 1]
+    sf_block *free_block = place(get_next_block(data_block), create_header(free_block_size, PREV_BLOCK_ALLOCATED, 0)); // place checks if block is wilderness block
+
+    sf_block *epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
+    if((get_prev_alloc_bit(epilogue) == 0) && (get_prev_block(epilogue) != free_block)) { // coalesce with wilderness if it exists. and not == free block
+        coalesce_block(free_block, get_prev_block(epilogue));
+    }
+    return data_block;
+}
+int is_invalid_pointer(void *pp){
+    sf_block *block = (sf_block *)(((void *)pp)-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
+    sf_block *prologue = (sf_block*)(sf_mem_start()+(M-(sizeof(sf_header)+sizeof(sf_footer)))); // pp = payload pointer
+    sf_block *epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
+    if ((pp == NULL)
+        || ((((long int)pp)%M) != 0)
+        || (get_alloc_bit(block) == 0)
+        || (((void *)(&(block->header))) < ((void *)get_next_block(prologue)))
+        || (((void *)(&(block->header))) > ((void *)epilogue))
+        || ((get_prev_alloc_bit(block) == 0) && (get_alloc_bit(get_prev_block(block)) != 0))
+        ) { // invalid pointer
+        // pointer == NULL
+        // pointer not alligned to 64-bytes
+        // allocated bit in header = 0
+        // header is before the end of the prologue
+        // header is after the beginning of the epilogue
+        // prev_alloc = 0 && alloc(previous block)!=0
+        return 1;
+    }
+    return 0;
 }
 
 void *sf_malloc(size_t size) {
@@ -254,8 +285,8 @@ void *sf_malloc(size_t size) {
 
 void sf_free(void *pp) {
     sf_block *block = (sf_block *)(((void *)pp)-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
-    sf_block *prologue = (sf_block*)(sf_mem_start()+(M-(sizeof(sf_header)+sizeof(sf_footer)))); // pp = payload pointer
-    sf_block *epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
+    sf_block *prologue = (sf_block*)(sf_mem_start()+(M-(sizeof(sf_header)+sizeof(sf_footer))));
+    sf_block *epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
     // verify pointer
     if ((pp == NULL)
         || ((((long int)pp)%M) != 0)
@@ -289,6 +320,46 @@ void sf_free(void *pp) {
 }
 
 void *sf_realloc(void *pp, size_t rsize) {
+    // invalid pointer
+    if(is_invalid_pointer(pp)) {
+        sf_errno = EINVAL;
+        return NULL;
+    }
+    // valid pointer
+    sf_block *block = (sf_block *)(((void *)pp)-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
+    if(rsize == 0) {
+        sf_free(block); // free block
+        return NULL;
+    }
+    // if re-size = size, no need to reallocate
+    if(get_block_size(block) == rsize) {
+        return pp;
+    }
+    // larger size
+    if(get_block_size(block) < rsize) {
+        // call sf_malloc to obtain a larger block
+        void *reallocated_pointer = sf_malloc(rsize);
+        // no more memory
+        if(reallocated_pointer == NULL) { // sf_errno = ENOMEM, set in malloc
+            return NULL;
+        }
+        // call memcpy to copy the data
+        memcpy(reallocated_pointer, pp, rsize);
+        // call free on the original block
+        sf_free(pp); // coalescing done in free
+        //return block from sf_malloc
+        return reallocated_pointer;
+    }
+    if(get_block_size(block) > rsize) {
+        //determine size of block to be allocated
+        int block_size = rsize + 8; //add header size +8
+        int remainder = block_size%M;
+        if(remainder != 0){
+            remainder = M-(remainder); //add padding = multiple of 64 alignment
+        }
+        block_size += remainder;
+        return split_block(block, block_size)->body.payload;
+    }
     return NULL;
 }
 

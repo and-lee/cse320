@@ -171,6 +171,8 @@ Test(sf_memsuite_student, realloc_larger_block, .init = sf_mem_init, .fini = sf_
 	void *x = sf_malloc(sizeof(int));
 	/* void *y = */ sf_malloc(10);
 	x = sf_realloc(x, sizeof(int) * 20);
+	printf("%s\n", "realloc larger block list");
+	sf_show_heap();
 
 	cr_assert_not_null(x, "x is NULL!");
 	sf_block *bp = (sf_block *)((char *)x - 2*sizeof(sf_header));
@@ -185,6 +187,8 @@ Test(sf_memsuite_student, realloc_larger_block, .init = sf_mem_init, .fini = sf_
 Test(sf_memsuite_student, realloc_smaller_block_splinter, .init = sf_mem_init, .fini = sf_mem_fini) {
 	void *x = sf_malloc(sizeof(int) * 20);
 	void *y = sf_realloc(x, sizeof(int) * 16);
+	printf("%s\n", "realloc smaller block splinter");
+	sf_show_heap();
 
 	cr_assert_not_null(y, "y is NULL!");
 	cr_assert(x == y, "Payload addresses are different!");
@@ -201,6 +205,8 @@ Test(sf_memsuite_student, realloc_smaller_block_splinter, .init = sf_mem_init, .
 Test(sf_memsuite_student, realloc_smaller_block_free_block, .init = sf_mem_init, .fini = sf_mem_fini) {
 	void *x = sf_malloc(sizeof(double) * 8);
 	void *y = sf_realloc(x, sizeof(int));
+	printf("%s\n", "realloc smaller block free block");
+	sf_show_heap();
 
 	cr_assert_not_null(y, "y is NULL!");
 
@@ -218,4 +224,3 @@ Test(sf_memsuite_student, realloc_smaller_block_free_block, .init = sf_mem_init,
 //STUDENT UNIT TESTS SHOULD BE WRITTEN BELOW
 //DO NOT DELETE THESE COMMENTS
 //############################################
-
