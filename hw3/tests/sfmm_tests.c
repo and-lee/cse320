@@ -52,6 +52,8 @@ Test(sf_memsuite_student, malloc_an_int, .init = sf_mem_init, .fini = sf_mem_fin
 	cr_assert_not_null(x, "x is NULL!");
 
 	*x = 4;
+	//printf("%s\n", "malloc an int");
+	//sf_show_heap();
 
 	cr_assert(*x == 4, "sf_malloc failed to give proper space for an int!");
 
@@ -67,6 +69,8 @@ Test(sf_memsuite_student, malloc_three_pages, .init = sf_mem_init, .fini = sf_me
 	sf_errno = 0;
 	// We want to allocate up to exactly three pages.
 	void *x = sf_malloc(3 * PAGE_SZ - ((1 << 6) - sizeof(sf_header)) - 64 - 2*sizeof(sf_header));
+	//printf("%s\n", "malloc three pages");
+	//sf_show_heap();
 
 	cr_assert_not_null(x, "x is NULL!");
 	assert_free_block_count(0, 0);
@@ -76,6 +80,8 @@ Test(sf_memsuite_student, malloc_three_pages, .init = sf_mem_init, .fini = sf_me
 Test(sf_memsuite_student, malloc_too_large, .init = sf_mem_init, .fini = sf_mem_fini) {
 	sf_errno = 0;
 	void *x = sf_malloc(PAGE_SZ << 16);
+	//printf("%s\n", "malloc too large");
+	//sf_show_heap();
 
 	cr_assert_null(x, "x is not NULL!");
 	assert_free_block_count(0, 1);
@@ -90,6 +96,8 @@ Test(sf_memsuite_student, free_quick, .init = sf_mem_init, .fini = sf_mem_fini) 
 	/* void *z = */ sf_malloc(1);
 
 	sf_free(y);
+	//printf("%s\n", "free quick");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(64, 1);
@@ -104,6 +112,8 @@ Test(sf_memsuite_student, free_no_coalesce, .init = sf_mem_init, .fini = sf_mem_
 	/* void *z = */ sf_malloc(1);
 
 	sf_free(y);
+	//printf("%s\n", "free no coalesce");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(256, 1);
@@ -120,6 +130,8 @@ Test(sf_memsuite_student, free_coalesce, .init = sf_mem_init, .fini = sf_mem_fin
 
 	sf_free(y);
 	sf_free(x);
+	//printf("%s\n", "free coalesce");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 2);
 	assert_free_block_count(576, 1);
@@ -138,6 +150,8 @@ Test(sf_memsuite_student, freelist, .init = sf_mem_init, .fini = sf_mem_fini) {
 	sf_free(u);
 	sf_free(w);
 	sf_free(y);
+	//printf("%s\n", "free list");
+	//sf_show_heap();
 
 	assert_free_block_count(0, 4);
 	assert_free_block_count(256, 3);
@@ -157,6 +171,8 @@ Test(sf_memsuite_student, realloc_larger_block, .init = sf_mem_init, .fini = sf_
 	void *x = sf_malloc(sizeof(int));
 	/* void *y = */ sf_malloc(10);
 	x = sf_realloc(x, sizeof(int) * 20);
+	//printf("%s\n", "realloc larger block");
+	//sf_show_heap();
 
 	cr_assert_not_null(x, "x is NULL!");
 	sf_block *bp = (sf_block *)((char *)x - 2*sizeof(sf_header));
@@ -171,6 +187,8 @@ Test(sf_memsuite_student, realloc_larger_block, .init = sf_mem_init, .fini = sf_
 Test(sf_memsuite_student, realloc_smaller_block_splinter, .init = sf_mem_init, .fini = sf_mem_fini) {
 	void *x = sf_malloc(sizeof(int) * 20);
 	void *y = sf_realloc(x, sizeof(int) * 16);
+	//printf("%s\n", "realloc smaller block splinter");
+	//sf_show_heap();
 
 	cr_assert_not_null(y, "y is NULL!");
 	cr_assert(x == y, "Payload addresses are different!");
@@ -187,6 +205,8 @@ Test(sf_memsuite_student, realloc_smaller_block_splinter, .init = sf_mem_init, .
 Test(sf_memsuite_student, realloc_smaller_block_free_block, .init = sf_mem_init, .fini = sf_mem_fini) {
 	void *x = sf_malloc(sizeof(double) * 8);
 	void *y = sf_realloc(x, sizeof(int));
+	//printf("%s\n", "realloc smaller block free block");
+	//sf_show_heap();
 
 	cr_assert_not_null(y, "y is NULL!");
 
@@ -204,3 +224,55 @@ Test(sf_memsuite_student, realloc_smaller_block_free_block, .init = sf_mem_init,
 //STUDENT UNIT TESTS SHOULD BE WRITTEN BELOW
 //DO NOT DELETE THESE COMMENTS
 //############################################
+
+Test(sf_memsuite_student, memalign_test, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_memalign(500, 256);
+	sf_show_heap();
+
+	//aligned
+	//sf_memalign(500, 64);
+	//sf_memalign(64, 64);
+	//sf_memalign(128, 128);
+
+
+	//sf_memalign(128, 256);
+	//sf_show_heap();
+}
+
+Test(sf_memsuite_student, memalign_test2, .init = sf_mem_init, .fini = sf_mem_fini) {
+	//aligned
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_memalign(500, 256);
+	sf_show_heap();
+	/*sf_malloc(8);
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_memalign(300, 512);
+	sf_show_heap();*/
+}
+
+Test(sf_memsuite_student, memalign_test3, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_memalign(300, 512);
+	sf_show_heap();
+	//aligned
+	//sf_memalign(100, 64);
+	//sf_show_heap();
+}
+
+Test(sf_memsuite_student, memalign_test4, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_malloc(8);
+	sf_malloc(8);
+	sf_memalign(300, 512);
+	sf_show_heap();
+}
