@@ -276,3 +276,29 @@ Test(sf_memsuite_student, memalign_test4, .init = sf_mem_init, .fini = sf_mem_fi
 	sf_memalign(300, 512);
 	sf_show_heap();
 }
+
+Test(sf_memsuite_student, memalign_test5, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_memalign(4, 512);
+	sf_memalign(4, 512);
+	sf_show_heap();
+}
+
+Test(sf_memsuite_student, memalign_test6, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_memalign(4, 64);
+	sf_show_heap();
+}
+
+Test(sf_memsuite_student, memalign_test7, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_memalign(4, 128);
+	sf_show_heap();
+}
+
+Test(sf_memsuite_student, memalign_test8, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_memalign(4, 256);
+	sf_show_heap();
+}
+
+Test(sf_memsuite_student, memalign_test9, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_memalign(4, 512);
+	sf_show_heap();
+}
