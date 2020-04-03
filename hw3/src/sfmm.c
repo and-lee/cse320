@@ -46,7 +46,7 @@ long int get_block_size(sf_block *block){
 long int get_alloc_bit(sf_block *block) {
     return block->header & THIS_BLOCK_ALLOCATED;
 }
-long int get_prev_alloc_bit(sf_block *block) {
+long int get_prev_alloc_bit(sf_block *block) { // returns non 0 if set
     return block->header & PREV_BLOCK_ALLOCATED;
 }
 sf_header create_header(size_t size, long int prev_alloc, long int alloc) {
@@ -288,17 +288,17 @@ void sf_free(void *pp) {
     }
     // valid pointer
     // set alloc = 0
-    block->header = create_header(get_block_size(block), get_prev_alloc_bit(block), 0);
-    get_next_block(block)->prev_footer = block->header; // set footer
-    insert_free_list(get_free_list(block), block); // add to free list
-    //place
+    // set footer
+    // add to free list
+    // set pal
+    place(block, create_header(get_block_size(block), get_prev_alloc_bit(block), 0));
 
     // coalesce block with adjacent free blocks and re-insert into appropriate free list
-    sf_block *next_block = get_next_block(block);
     if(get_prev_alloc_bit(block) == 0) {
         sf_block *prev_block = get_prev_block(block);
-        coalesce_block(prev_block, block);
+        block = coalesce_block(prev_block, block);
     }
+    sf_block *next_block = get_next_block(block);
     if(get_alloc_bit(next_block) == 0) {
         coalesce_block(block, next_block);
     }
