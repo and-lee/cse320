@@ -75,16 +75,6 @@ int get_free_list_index(size_t size) {
     }
     return 9;
 }
-sf_block *get_free_list(sf_block *block) {
-    block = (sf_block*)(block);
-    sf_block *epilogue = (sf_block*)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
-    // if = wildernes block
-    if(get_next_block(block) == epilogue) {
-        return &sf_free_list_heads[NUM_FREE_LISTS-1];
-    }
-    long int size = get_block_size(block);
-    return &sf_free_list_heads[get_free_list_index(size)];
-}
 sf_block *place(void *address, sf_header header) {
     // heap already exists and is initialized
     sf_block *block = (sf_block *)(((void *)address));
