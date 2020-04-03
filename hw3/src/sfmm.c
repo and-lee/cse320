@@ -142,6 +142,7 @@ sf_block *split_block(sf_block *block, size_t size) {
     if((free_block_size < M) || (free_block_size == 0)) {
         // alloc = 1
         block->header |= THIS_BLOCK_ALLOCATED;
+        get_next_block(block)->header |= PREV_BLOCK_ALLOCATED;
     } else {
         // split and assign blocks
         // lower part = allocation request [al: 1, sz:       size, p.al: block.pal]
@@ -245,7 +246,6 @@ void *sf_malloc(size_t size) {
             return split_block(wilderness, block_size)->body.payload;
         }
     }
-
     // wilderness block does not exist || wilderness block is not big enough > create more space in memory
     // old epilogue = header block
     sf_block *new_block = ((sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer))));
@@ -269,6 +269,7 @@ void *sf_malloc(size_t size) {
         }
         // coalesce
         new_block->header = create_header(get_block_size(new_block)+PAGE_SZ, get_prev_alloc_bit(new_block), get_alloc_bit(new_block));
+        //place(new_block, create_header(get_block_size(new_block)+PAGE_SZ, get_prev_alloc_bit(new_block), get_alloc_bit(new_block)));
 
         // create new epilogue
         sf_block *new_epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
