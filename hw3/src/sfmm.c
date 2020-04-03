@@ -54,23 +54,23 @@ sf_header create_header(size_t size, long int prev_alloc, long int alloc) {
     return header;
 }
 int get_free_list_index(size_t size) {
-    if(size>0 && size<=M) {
+    if((size>0) && (size<=M)) {
         return 0;
-    } else if(size>M && size<=2*M) {
+    } else if((size>M) && (size<=(2*M))) {
         return 1;
-    } else if(size>2*M && size<=3*M) {
+    } else if((size>(2*M)) && (size<=(3*M))) {
         return 2;
-    } else if(size>3*M && size<=5*M) {
+    } else if((size>(3*M)) && (size<=(5*M))) {
         return 3;
-    } else if(size>5*M && size<=8*M) {
+    } else if((size>(5*M)) && (size<=(8*M))) {
         return 4;
-    } else if(size>8*M && size<=13*M) {
+    } else if((size>(8*M)) && (size<=(13*M))) {
         return 5;
-    } else if(size>13*M && size<=21*M) {
+    } else if((size>(13*M)) && (size<=(21*M))) {
         return 6;
-    } else if(size>21*M && size<=34*M) {
+    } else if((size>(21*M)) && (size<=(34*M))) {
         return 7;
-    } else if(size>34*M) {
+    } else if(size>(34*M)) {
         return 8;
     }
     return 9;
@@ -112,7 +112,7 @@ sf_block *place(void *address, sf_header header) {
         if(next_block == epilogue) {
             insert_free_list(&sf_free_list_heads[NUM_FREE_LISTS-1], block);
         } else {
-            insert_free_list(get_free_list(block), block);
+            insert_free_list(&sf_free_list_heads[get_free_list_index(get_block_size(block))], block);
         }
     }
     return block;
@@ -316,7 +316,7 @@ void *sf_realloc(void *pp, size_t rsize) {
     // valid pointer
     sf_block *block = (sf_block *)(((void *)pp)-(sizeof(sf_header)+sizeof(sf_footer))); // pp = payload pointer
     if(rsize == 0) {
-        sf_free(block); // free block
+        sf_free(pp); // free block
         return NULL;
     }
     int block_size = rsize + sizeof(sf_header); // add header size +8

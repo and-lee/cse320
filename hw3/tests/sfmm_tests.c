@@ -229,7 +229,7 @@ Test(sf_memsuite_student, memalign_not_aligned, .init = sf_mem_init, .fini = sf_
 	sf_errno = 0;
 	void *x = sf_memalign(sizeof(int), 1024);
 	void *y = sf_memalign(sizeof(int), 512);
-	sf_show_heap();
+	//sf_show_heap();
 
 	cr_assert_not_null(x, "x is NULL!");
 	cr_assert_eq(((long int)x)%1024, 0, "Block not aligned!");
@@ -291,7 +291,7 @@ Test(sf_memsuite_student, malloc_correct_free_list, .init = sf_mem_init, .fini =
 	sf_free(c);
 
 	void *x = sf_malloc(sizeof(int)*40);
-	//sf_show_heap();
+	sf_show_heap();
 
 	// was sucessfully malloced
 	cr_assert_not_null(x, "x is NULL!");
@@ -314,7 +314,6 @@ Test(sf_memsuite_student, malloc_split, .init = sf_mem_init, .fini = sf_mem_fini
 	void *a = sf_malloc(sizeof(int)*80);
 	sf_malloc(sizeof(int));
 	sf_free(a);
-	//sf_show_heap();
 
 	void *x = sf_malloc(sizeof(int)*20);
 	//sf_show_heap();
