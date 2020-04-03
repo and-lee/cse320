@@ -385,9 +385,9 @@ void *sf_memalign(size_t size, size_t align) {
     }
     move_up += alignment_remainder;
     // normal payload address satisfies the requested alignment
-    if(move_up == 0) { // if (((long int)block_payload)%align == 0) = aligned
-        // do nothing
-    }
+    //if(move_up == 0) { // if (((long int)block_payload)%align == 0) = aligned
+    // do nothing
+
     // larger address within the block that satisfies the requested alignment
     // has sufficient space after to hold requested size payload
     // initial portion of the block can be split off (without splitner = at least minimum size) and freed
