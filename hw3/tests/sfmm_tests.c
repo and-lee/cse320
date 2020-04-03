@@ -225,27 +225,40 @@ Test(sf_memsuite_student, realloc_smaller_block_free_block, .init = sf_mem_init,
 //DO NOT DELETE THESE COMMENTS
 //############################################
 
-/*Test(sf_memsuite_student, memalign_not_aligned, .init = sf_mem_init, .fini = sf_mem_fini) {
-	sf_malloc(sizeof(int));
-	sf_malloc(sizeof(int));
-	sf_malloc(sizeof(int));
-
-	void *x = sf_memalign(100, 512);
-	if(((long int)x)%512 == 0) {
-		printf("%s\n", "PASS");
-	}
+Test(sf_memsuite_student, memalign_not_aligned, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_errno = 0;
+	void *x = sf_memalign(sizeof(int), 1024);
+	void *y = sf_memalign(sizeof(int), 512);
 	sf_show_heap();
+
+	cr_assert_not_null(x, "x is NULL!");
+	cr_assert_eq(((long int)x)%1024, 0, "Block not aligned!");
+	cr_assert_not_null(y, "y is NULL!");
+	cr_assert_eq(((long int)y)%512, 0, "Block not aligned!");
+
+	// offset created, second memalign, y, has to have an inital portion that is freed
+		// more than 1 free block, wilderness and free block betweem memaligned blocks
+	assert_free_list_size(NUM_FREE_LISTS-1, 1); // wilderness block
+	cr_assert(sf_errno == 0, "sf_errno is not zero!");
 }
 
 Test(sf_memsuite_student, memalign_already_aligned, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_errno = 0;
 	void *x = sf_memalign(500, 64);
-	if(((long int)x)%64 == 0) {
-		printf("%s\n", "PASS");
-	}
-	sf_show_heap();
-}*/
+	//sf_show_heap();
+
+	// memalign with correct alignment is the same as malloc
+	cr_assert_not_null(x, "x is NULL!");
+	cr_assert_eq(((long int)x)%64, 0, "Block not aligned!");
+
+	assert_free_block_count(0, 1);
+	assert_free_block_count(3456, 1);
+	assert_free_list_size(NUM_FREE_LISTS-1, 1);
+	cr_assert(sf_errno == 0, "sf_errno is not zero!");
+}
 
 Test(sf_memsuite_student, free_coalesce_twice, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_errno = 0;
 	void *x = sf_malloc(sizeof(int));
 	void *y = sf_malloc(sizeof(int));
 	void *z = sf_malloc(sizeof(int));
@@ -256,6 +269,7 @@ Test(sf_memsuite_student, free_coalesce_twice, .init = sf_mem_init, .fini = sf_m
 	sf_free(y);
 	//sf_show_heap();
 
+	// coalesce with 2 free blocks, before and after selected block to free
 	assert_free_block_count(0, 2); // 3 lists, coalesce 2 lists, create 1 list. (3-2)+1 = 2
 	assert_free_block_count(192, 1); // coalesce 64 above, 64 below, and block itself sz 64. 64*3 = 192
 	assert_free_list_size(2, 1); // only 1 freelist of size 192
@@ -265,6 +279,7 @@ Test(sf_memsuite_student, free_coalesce_twice, .init = sf_mem_init, .fini = sf_m
 }
 
 Test(sf_memsuite_student, malloc_correct_free_list, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_errno = 0;
 	void *a = sf_malloc(sizeof(int)*20);
 	sf_malloc(sizeof(int));
 	void *b = sf_malloc(sizeof(int)*40);
@@ -288,16 +303,31 @@ Test(sf_memsuite_student, malloc_correct_free_list, .init = sf_mem_init, .fini =
 	assert_free_list_size(1, 1); // only 1 freelist of size 128
 	assert_free_block_count(256, 1);
 	assert_free_list_size(3, 1); // only 1 freelist of size 256
-	assert_free_block_count(3200, 1); //
+	assert_free_block_count(3200, 1);
 	assert_free_list_size(NUM_FREE_LISTS-1, 1); // only 1 wilderness block
 	cr_assert(sf_errno == 0, "sf_errno is not zero!");
 }
-/*
-Test(sf_memsuite_student, malloc_split, .init = sf_mem_init, .fini = sf_mem_fini) {
-	void *x = sf_malloc(sizeof(int)*80);
-	sf_malloc(sizeof(int));
-	sf_free(x);
 
-	sf_malloc(sizeof(int)*20);
-	sf_show_heap();
-}*/
+
+Test(sf_memsuite_student, malloc_split, .init = sf_mem_init, .fini = sf_mem_fini) {
+	sf_errno = 0;
+	void *a = sf_malloc(sizeof(int)*80);
+	sf_malloc(sizeof(int));
+	sf_free(a);
+	//sf_show_heap();
+
+	void *x = sf_malloc(sizeof(int)*20);
+	//sf_show_heap();
+
+	// was sucessfully malloced
+	cr_assert_not_null(x, "x is NULL!");
+
+	// free bigger block and malloc smaller block to create split. should create smaller free block.
+	assert_free_block_count(0, 2); // 2 free lists
+	assert_free_list_size(4, 0); // no free list, was split
+	assert_free_list_size(3, 1); // free block created from split
+	assert_free_block_count(256, 1);
+	assert_free_block_count(3520, 1);
+	assert_free_list_size(NUM_FREE_LISTS-1, 1); // only 1 wilderness block
+	cr_assert(sf_errno == 0, "sf_errno is not zero!");
+}

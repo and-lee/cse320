@@ -140,7 +140,7 @@ sf_block *split_block(sf_block *block, size_t size) {
     // split without creating a splinter (<=alignment) : 'over alloc'
     // exact size. do not need to split. use entire block
     if((free_block_size < M) || (free_block_size == 0)) {
-        // alloc = 1
+        // alloc = 1, next block pal = 1
         block->header |= THIS_BLOCK_ALLOCATED;
         get_next_block(block)->header |= PREV_BLOCK_ALLOCATED;
     } else {
@@ -149,6 +149,7 @@ sf_block *split_block(sf_block *block, size_t size) {
         block->header = create_header(size, get_prev_alloc_bit(block), THIS_BLOCK_ALLOCATED);
         // upper part = remainder [al: 0, sz:       get_block_size(block) - size, pal: 1]
         sf_block *free_block = place(get_next_block(block), create_header(free_block_size, PREV_BLOCK_ALLOCATED, 0));
+        // set footer and pal in next block
 
         // coalesce with wilderness if it exists. next block is free
         if(get_alloc_bit(get_next_block(free_block)) == 0) {
