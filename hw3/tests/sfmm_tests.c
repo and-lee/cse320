@@ -226,10 +226,10 @@ Test(sf_memsuite_student, realloc_smaller_block_free_block, .init = sf_mem_init,
 //############################################
 
 Test(sf_memsuite_student, memalign_not_aligned, .init = sf_mem_init, .fini = sf_mem_fini) {
-	// not aligned
 	sf_malloc(sizeof(int));
 	sf_malloc(sizeof(int));
 	sf_malloc(sizeof(int));
+
 	void *x = sf_memalign(100, 512);
 	if(((long int)x)%512 == 0) {
 		printf("%s\n", "PASS");
@@ -238,7 +238,6 @@ Test(sf_memsuite_student, memalign_not_aligned, .init = sf_mem_init, .fini = sf_
 }
 
 Test(sf_memsuite_student, memalign_already_aligned, .init = sf_mem_init, .fini = sf_mem_fini) {
-	//aligned
 	void *x = sf_memalign(500, 64);
 	if(((long int)x)%64 == 0) {
 		printf("%s\n", "PASS");
@@ -251,23 +250,12 @@ Test(sf_memsuite_student, free_coalesce_twice, .init = sf_mem_init, .fini = sf_m
 	void *y = sf_malloc(sizeof(int));
 	void *z = sf_malloc(sizeof(int));
 	sf_malloc(sizeof(int));
-
 	sf_free(x);
 	sf_free(z);
 
 	sf_free(y);
-
 	sf_show_heap();
 }
-/*Test(sf_memsuite_student, free_coalesce_twice_with_wilderness, .init = sf_mem_init, .fini = sf_mem_fini) {
-	void *x = sf_malloc(sizeof(int));
-	void *y = sf_malloc(sizeof(int));
-
-	sf_free(x);
-
-	sf_free(y);
-	sf_show_heap();
-}*/
 
 Test(sf_memsuite_student, malloc_correct_free_list, .init = sf_mem_init, .fini = sf_mem_fini) {
 	void *x = sf_malloc(sizeof(int)*20);
@@ -284,3 +272,11 @@ Test(sf_memsuite_student, malloc_correct_free_list, .init = sf_mem_init, .fini =
 	sf_show_heap();
 }
 
+Test(sf_memsuite_student, free_and_malloc_smaller, .init = sf_mem_init, .fini = sf_mem_fini) {
+	void *x = sf_malloc(sizeof(int)*80);
+	sf_malloc(sizeof(int));
+	sf_free(x);
+
+	sf_malloc(sizeof(int)*20);
+	sf_show_heap();
+}

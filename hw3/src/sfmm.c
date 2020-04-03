@@ -148,10 +148,10 @@ sf_block *split_block(sf_block *block, size_t size) {
         block->header = create_header(size, get_prev_alloc_bit(block), THIS_BLOCK_ALLOCATED);
         // upper part = remainder [al: 0, sz:       get_block_size(block) - size, pal: 1]
         sf_block *free_block = place(get_next_block(block), create_header(free_block_size, PREV_BLOCK_ALLOCATED, 0));
-        // coalesce with wilderness if it exists. and not == free block
-        sf_block *epilogue = (sf_block *)(sf_mem_end()-(sizeof(sf_header)+sizeof(sf_footer)));
-        if((get_prev_alloc_bit(epilogue) == 0) && (get_prev_block(epilogue) != free_block)) {
-            coalesce_block(free_block, get_prev_block(epilogue));
+
+        // coalesce with wilderness if it exists. next block is free
+        if(get_alloc_bit(get_next_block(free_block)) == 0) {
+            coalesce_block(free_block, get_next_block(free_block));
         }
     }
     return block;
