@@ -229,7 +229,7 @@ Test(sf_memsuite_student, memalign_not_aligned, .init = sf_mem_init, .fini = sf_
 	sf_errno = 0;
 	void *x = sf_memalign(sizeof(int), 1024);
 	void *y = sf_memalign(sizeof(int), 512);
-	//sf_show_heap();
+	sf_show_heap();
 
 	cr_assert_not_null(x, "x is NULL!");
 	cr_assert_eq(((long int)x)%1024, 0, "Block not aligned!");
@@ -237,7 +237,18 @@ Test(sf_memsuite_student, memalign_not_aligned, .init = sf_mem_init, .fini = sf_
 	cr_assert_eq(((long int)y)%512, 0, "Block not aligned!");
 
 	// offset created, second memalign, y, has to have an inital portion that is freed
-		// more than 1 free block, wilderness and free block betweem memaligned blocks
+	// more than 1 free block. wilderness and free block betweem memaligned blocks = at least 2 blocks
+	int cnt = 0;
+    for(int i = 0; i < NUM_FREE_LISTS; i++) {
+		sf_block *bp = sf_free_list_heads[i].body.links.next;
+		while(bp != &sf_free_list_heads[i]) {
+			cnt++;
+		    bp = bp->body.links.next;
+		}
+    }
+	cr_assert_geq(cnt, 2, "Wrong number of free blocks (exp<=%d, found=%d)",
+		     2, cnt);
+
 	assert_free_list_size(NUM_FREE_LISTS-1, 1); // wilderness block
 	cr_assert(sf_errno == 0, "sf_errno is not zero!");
 }
@@ -291,7 +302,7 @@ Test(sf_memsuite_student, malloc_correct_free_list, .init = sf_mem_init, .fini =
 	sf_free(c);
 
 	void *x = sf_malloc(sizeof(int)*40);
-	sf_show_heap();
+	//sf_show_heap();
 
 	// was sucessfully malloced
 	cr_assert_not_null(x, "x is NULL!");
