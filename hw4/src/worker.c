@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 #include "debug.h"
 #include "polya.h"
@@ -9,15 +12,24 @@ void sigterm_handler(int);
 void sighup_handler(int);
 
 void sigterm_handler(int sig) {
+    debug("Received signal 15 - Exited");
     // abandon any current solution attempt
     exit(EXIT_SUCCESS); //ternimate normally with status EXIT_SUCCESS = EXITED
 }
 
 volatile sig_atomic_t canceled = 0;
 void sighup_handler(int sig) {
-    canceled = 1;
-    //write result, aborted.
-    exit(EXIT_FAILURE); // stop attempt and send 'failed' result to master. exit? = ABORTED
+    int olderrno = errno;
+    pid_t pid;
+    while((pid = wait(NULL)) > 0) {
+        canceled = 1;
+        debug("Received signal 1 - Aborted");
+        // stop attempt and send 'failed' "result" to master = ABORTED
+    }
+    /*if(errno != ECHILD) {
+        perror("wait error");
+    }*/
+    errno = olderrno;
 }
 
 /*
@@ -28,56 +40,92 @@ int worker(void) {
     // master redirects worker stdin and stdout to pipes
     // worker reads from stdin writes to stdout
 
-    if(signal(SIGTERM, sigterm_handler) == SIG_ERR)
+    if(signal(SIGTERM, sigterm_handler) == SIG_ERR) {
         perror("signal error");
-    if(signal(SIGHUP, sighup_handler) == SIG_ERR)
+        return EXIT_FAILURE;
+    }
+
+    if(signal(SIGHUP, sighup_handler) == SIG_ERR) {
         perror("signal error");
+        return EXIT_FAILURE;
+    }
 
     // initialization = STARTED
-    //
-    raise(SIGSTOP); // IDLE
+    debug("Starting");
+    if(raise(SIGSTOP) !=0) { // IDLE
+        perror("raise error");
+        return EXIT_FAILURE;
+    }
+    debug("Idling - sent SIGSTOP to itself");
 
     //SIGCONT = CONTINUED // master
+    debug("Continuing");
     // loop - repearedly receive a problem from master process to solve
-    //
-    // RUNNING
-    // get problem
-    struct problem* problem_ptr = malloc(sizeof(struct problem)); // allocated space for probem = header + data
-    ////if(problem_ptr == NULL)
-    fread(problem_ptr, sizeof(struct problem), 1, stdin);// read stdin to get header
-    ////ferror //eof includes short count, which is not an error
-    problem_ptr = realloc(problem_ptr, problem_ptr -> size); // realloc size
-    ////if(problem_ptr == NULL)
-    fread(problem_ptr->data, (problem_ptr -> size - sizeof(struct problem)), 1, stdin);// continue to read stdin to get 'data' = total size - header size
-    ////ferror
+    while(1) {
+        // RUNNING
+        debug("Running");
+        debug("Reading problem");
+        // get problem
+        struct problem* problem_ptr = malloc(sizeof(struct problem)); // allocated space for probem = header + data
+        if(problem_ptr == NULL) {
+            perror("malloc error");
+            return EXIT_FAILURE;
+        }
+        fread(problem_ptr, sizeof(struct problem), 1, stdin);// read stdin to get header
+        //ferror //eof includes short count, which is not an error
+        if(ferror(stdin)) {
+            perror("fread error");
+            return EXIT_FAILURE;
+        }
+        problem_ptr = realloc(problem_ptr, problem_ptr -> size); // realloc size
+        if(problem_ptr == NULL) {
+            perror("realloc error");
+            return EXIT_FAILURE;
+        }
+        fread(problem_ptr->data, (problem_ptr -> size - sizeof(struct problem)), 1, stdin);// continue to read stdin to get 'data' = total size - header size
+        //ferror
+        if(ferror(stdin)) {
+            perror("fread error");
+            return EXIT_FAILURE;
+        }
 
-    // attempts to solve problem
-    struct result* result_ptr = (void*)(solvers[problem_ptr -> type].solve(problem_ptr, &canceled));
-    // until 1) solution is found
-    // 2) solution procedure fails
-    // 3) master process notifies worker to cancel solution procedure - SIGHUP *************
-    //debug("DDDDDDDDDD %d", result_ptr->failed);
-    //if (result_ptr->failed == 0) {
-    //}
-    //debug("SSSSSSSSSSSSS %ld", result_ptr->size);
-    //debug("IIIIIIIIIIIIIIII %d", result_ptr->id);
-    //result_ptr->data
-    fwrite(result_ptr, result_ptr->size, 1, stdout);
-    fflush(stdout);
+        debug("Solving Problem");
+        // attempts to solve problem
+        struct result* result_ptr = (void*)(solvers[problem_ptr -> type].solve(problem_ptr, &canceled));
+        // until 1) solution is found
+        // 2) solution procedure fails
+        // 3) master process notifies worker to cancel solution procedure - SIGHUP
+            if(canceled == 1) {
+                // stop attempt and send 'failed' "result" to master = ABORTED
+                result_ptr->failed = 1;
+            }
+
+        // send back "result" to the master process = write result to stdout
+        fwrite(result_ptr, result_ptr->size, 1, stdout);
+        //ferror
+        if(ferror(stdout)) {
+            //close
+            //exit
+            perror("fwrite error");
+            return EXIT_FAILURE;
+        }
+        if(fflush(stdout) == EOF) {
+            perror("fflush error");
+            return EXIT_FAILURE;
+        }
+        //close? *********************************
 
 
-// free DATA that was allocated ****************************** when solution found
+        // free data that was allocated (when solution found)
+        free(problem_ptr);
 
-    // send back "result" to the master process
-    // write result to stdout
+        // stop itself and wait for a new problem to be sent by the master process = STOPPED
+        if(raise(SIGSTOP) !=0) {
+            perror("raise error");
+            return EXIT_FAILURE;
+        }
+        debug("Stopped");
+    }
 
-
-    // catch SIGHUP signal while trying to solve problem = stop attempt and send 'failed' result to master
-        //if current solution attempt has not already succeeded/failed - then it's abandoned and send failed to master
-            //EXIT_FAILURE (done before STOP signal) = ABORTED
-
-    raise(SIGSTOP); // stop itself and wait for a new problem to be sent by the master process = STOPPED
-
-
-    return EXIT_FAILURE;
+    return EXIT_FAILURE; //********************
 }
