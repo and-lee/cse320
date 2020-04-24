@@ -1,8 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <errno.h>
 
 #include "debug.h"
@@ -49,11 +47,11 @@ int worker(void) {
         exit(EXIT_FAILURE);
     }
 
-    if(raise(SIGSTOP) !=0) { // IDLE
+    debug("Idling - sent SIGSTOP to itself");
+    if(raise(SIGSTOP) != 0) { // IDLE
         perror("raise error");
         exit(EXIT_FAILURE);
     }
-    debug("Idling - sent SIGSTOP to itself");
 
     //SIGCONT = CONTINUED // master
     debug("Continuing");
@@ -94,7 +92,10 @@ int worker(void) {
         // UNBLOCK
         sigprocmask(SIG_SETMASK, &prev_mask, NULL);
         // until 1) solution is found
+
         // 2) solution procedure fails
+            // returns null if failed or canceled *****************
+
         // 3) master process notifies worker to cancel solution procedure - SIGHUP
             if(canceled == 1) {
                 // stop attempt and send 'failed' "result" to master = ABORTED
@@ -107,27 +108,24 @@ int worker(void) {
         //ferror
         if(ferror(stdout)) {
             //close
-            //exit
-            perror("fwrite error");
-            exit(EXIT_FAILURE);
+            exit(EXIT_FAILURE);;
         }
         if(fflush(stdout) == EOF) {
             perror("fflush error");
             exit(EXIT_FAILURE);
         }
-        //close? *********************************
-
+        free(result_ptr);
 
         // free data that was allocated (when solution found)
         free(problem_ptr);
 
         // stop itself and wait for a new problem to be sent by the master process = STOPPED
+        debug("Stopped");
         if(raise(SIGSTOP) !=0) {
             perror("raise error");
             exit(EXIT_FAILURE);
         }
-        debug("Stopped");
     }
 
-    return EXIT_FAILURE; //********************
+    return EXIT_SUCCESS; //********************
 }
