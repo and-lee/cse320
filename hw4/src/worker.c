@@ -12,7 +12,7 @@ void sighup_handler(int);
 void sigterm_handler(int sig) {
     debug("Received signal 15 - Exited");
     // abandon any current solution attempt
-    exit(EXIT_SUCCESS); //ternimate normally with status EXIT_SUCCESS = EXITED
+    exit(EXIT_SUCCESS); // ternimate normally with status EXIT_SUCCESS = EXITED
 }
 
 volatile sig_atomic_t canceled = 0;
@@ -67,7 +67,7 @@ int worker(void) {
             exit(EXIT_FAILURE);
         }
         fread(problem_ptr, sizeof(struct problem), 1, stdin);// read stdin to get header
-        //ferror //eof includes short count, which is not an error
+        //ferror - EOF includes short count, which is not an error
         if(ferror(stdin)) {
             perror("fread error");
             exit(EXIT_FAILURE);
@@ -77,8 +77,9 @@ int worker(void) {
             perror("realloc error");
             exit(EXIT_FAILURE);
         }
-        fread(problem_ptr->data, (problem_ptr -> size - sizeof(struct problem)), 1, stdin);// continue to read stdin to get 'data' = total size - header size
-        //ferror
+        // continue to read stdin to get 'data' = total size - header size
+        fread(problem_ptr->data, (problem_ptr -> size - sizeof(struct problem)), 1, stdin);
+        // ferror
         if(ferror(stdin)) {
             perror("fread error");
             exit(EXIT_FAILURE);
@@ -92,10 +93,8 @@ int worker(void) {
         // UNBLOCK
         sigprocmask(SIG_SETMASK, &prev_mask, NULL);
         // until 1) solution is found
-
         // 2) solution procedure fails
             // returns null if failed or canceled *****************
-
         // 3) master process notifies worker to cancel solution procedure - SIGHUP
             if(canceled == 1) {
                 // stop attempt and send 'failed' "result" to master = ABORTED
@@ -105,9 +104,8 @@ int worker(void) {
 
         // send back "result" to the master process = write result to stdout
         fwrite(result_ptr, result_ptr->size, 1, stdout);
-        //ferror
+        // ferror
         if(ferror(stdout)) {
-            //close
             exit(EXIT_FAILURE);;
         }
         if(fflush(stdout) == EOF) {
