@@ -10,8 +10,7 @@
 
 volatile sig_atomic_t done;
 volatile sig_atomic_t state[MAX_WORKERS];
-//int ccount = 0;
-volatile sig_atomic_t w_id[MAX_WORKERS]; // **************
+volatile sig_atomic_t w_id[MAX_WORKERS];
 
 int get_w_index(int pid) {
     for(int j = 0; j < MAX_WORKERS; j++) {
@@ -27,44 +26,33 @@ void child_handler(int sig) {
     debug("SIGCHLD");
     int olderrno = errno;
     pid_t pid;
-    if (/*ccount > 0 && */(pid = waitpid(-1, NULL, WSTOPPED | WCONTINUED | WNOHANG)) != 0) {
+    if ((pid = waitpid(-1, NULL, WSTOPPED | WCONTINUED | WNOHANG)) != 0) {
         if(pid < 0) {
             perror("wait error");
         }
-        //--ccount;
-        //debug("reap child - handler");
         int index = get_w_index(pid);
-        debug("SIGCHLDD %d, STATE = %d", pid, state[index]);
+        debug("id = %d, STATE = %d", pid, state[index]);
 
-        if(state[index] == WORKER_STARTED) {
+        int prev_state = state[index];
+        // change state
+        if(prev_state  == WORKER_STARTED) {
             state[index] =  WORKER_IDLE; // set state = STARTED
-            sf_change_state(pid, WORKER_STARTED, WORKER_IDLE);
+        }
+        if(prev_state  == WORKER_IDLE) {
+            state[index] =  WORKER_CONTINUED; // set state = STARTED
+        }
+        if(prev_state  == WORKER_CONTINUED) {
+            state[index] =  WORKER_RUNNING; // set state = STARTED
+        }
+        if(prev_state  == WORKER_RUNNING) {
+            state[index] =  WORKER_STOPPED; // set state = STARTED
         }
 
 
+        sf_change_state(pid, prev_state , state[index]);
     }
-    /*if(ccount == 0) {
-        done = 1;
-    }*/
-
     errno = olderrno;
-
 }
-
-// create handlers to change state
-/*void state_handler(int sig) {
-    int olderrno = errno;
-    pid_t pid;
-    while ((pid = waitpid(-1, NULL, WSTOPPED)) != 0) {
-        if(pid < 0) {
-            perror("wait error");
-        }
-        //do
-        debug("state");
-    }
-
-    errno = olderrno;
-}*/
 
 /*
  * master
@@ -91,11 +79,9 @@ int master(int workers) {
     FILE /* *in,*/ *out;
 
     pid_t pid[workers];
-    //ccount = workers;
     int i;
 
     for(i = 0; i < workers; i++) {
-    //while(ccount > 0) {
         // create 2 pipes for each worker
         // use pipe(2) before worker process is forked using fork(2)
             //send problems from master to worker
@@ -105,9 +91,9 @@ int master(int workers) {
             exit(1);
         }
         w_fd[i] = m_to_w_fd[1];
-        debug("%d", w_fd[i]);
+        //debug("%d", w_fd[i]);
         r_fd[i] = w_to_m_fd[0];
-        debug("%d", r_fd[i]);
+        //debug("%d", r_fd[i]);
 
         if((pid[i] = fork()) < 0) {
             perror("fork error");
@@ -116,10 +102,6 @@ int master(int workers) {
         // WORKER/CHILD
         else if(pid[i] == 0) { // create workers/child
             debug("created new worker %d", (int)getpid());
-            /*w_fd[i] = m_to_w_fd[1];
-            debug("W %d", w_fd[i]);
-            r_fd[i] = w_to_m_fd[0];
-            debug("R %d", r_fd[i]);*/
             close(w_fd[i]); // close write side of pipe
             close(r_fd[i]); // close read side of pipe
 
@@ -130,17 +112,14 @@ int master(int workers) {
             close(w_to_m_fd[1]);
 
             //execute worker program with exec(3) - stops and waits for SIGCONT
-            //state[i] = 1;
-            debug("Started");
-            //w_id[i] = (int)getpid();
-            //debug("SET %d", w_id[i]);
+            debug("Starting worker %d", i);
             execl("bin/polya_worker", "polya_worker", NULL);
             //CATCH ERRORS // *****************
             //exit(0); // ********
         } else {
             state[i] = WORKER_STARTED;
             w_id[i] = pid[i];
-            debug("i = %d, ID = %d", i, w_id[i]);
+            debug("Started worker %d, id = %d in = %d out = %d", i, w_id[i], w_fd[i], r_fd[i]);
             // parent
             close(m_to_w_fd[0]); // close read side of pipe
             close(w_to_m_fd[1]); // close write side of pipe
@@ -150,57 +129,53 @@ int master(int workers) {
 //debug("parent id - %d", (int)getpid());
 
     // main loop
-    // MASTER/PARENT
-    //while (!done) {
     while(1) {
         //debug("parent id - %d", (int)getpid());
         //debug("ccount - %d", ccount);
-// if problems exist
-if(get_problem_variant(workers, 0)) {
-    for(i = 0; i < workers; i++) {
-        //debug("state = %d i = %d", state[i], i);
-        if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
-            struct problem* new_problem;
-            new_problem = get_problem_variant(workers, i);
-            // write header sizeof(struct problem)
-            //debug("F %d", w_fd[i]);
-            if((out = fdopen(w_fd[i], "w")) == NULL) { // write problem
-                perror("master unable to create output stream");
-                exit(1);
-            } // close *************
-            fwrite(new_problem, sizeof(struct problem), 1, out);
-            if(ferror(out)) { //ferror
-                //close
-                exit(EXIT_FAILURE);
-            }
-            // write data bytes
-            fwrite(new_problem->data, new_problem->size - sizeof(struct problem), 1, out);
-            if(ferror(out)) { //ferror
-                //close
-                exit(EXIT_FAILURE);
-            }
 
-            //fflush after entire problem is written
-            if(fflush(out) == EOF) {
-                perror("fflush error");
-                exit(EXIT_FAILURE);
-            }
-            //debug("W_ID %d, i = %d", w_id[i], i);
-            sf_send_problem(w_id[i], new_problem);
-            //kill(SIGCONT, w_id[i]); // SIGCONT *****
+        // if problems exist
+        if(get_problem_variant(workers, 0)) {
+            for(i = 0; i < workers; i++) {
+                //debug("state = %d i = %d", state[i], i);
+                if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
+                    struct problem* new_problem;
+                    new_problem = get_problem_variant(workers, i);
+                    // write header sizeof(struct problem)
+                    //debug("F %d", w_fd[i]);
+                    if((out = fdopen(w_fd[i], "w")) == NULL) { // write problem
+                        perror("master unable to create output stream");
+                        exit(1);
+                    } // close *************
+                    fwrite(new_problem, sizeof(struct problem), 1, out);
+                    if(ferror(out)) { //ferror
+                        //close
+                        exit(EXIT_FAILURE);
+                    }
+                    // write data bytes
+                    fwrite(new_problem->data, new_problem->size - sizeof(struct problem), 1, out);
+                    if(ferror(out)) { //ferror
+                        //close
+                        exit(EXIT_FAILURE);
+                    }
 
-            exit(1);
+                    //fflush after entire problem is written
+                    if(fflush(out) == EOF) {
+                        perror("fflush error");
+                        exit(EXIT_FAILURE);
+                    }
+                    //debug("W_ID %d, i = %d", w_id[i], i);
+                    sf_send_problem(w_id[i], new_problem);
+                    kill(SIGCONT, w_id[i]); // SIGCONT *****
+                    state[i] = WORKER_CONTINUED;
 
-        }
+                    //exit(1);
+
+                }
     }
 }
-        /*close(m_to_w_fd[0]); // close read side of pipe
-        close(w_to_m_fd[1]); // close write side of pipe
 
-for(i = 0; i < workers; i++) {
-        //debug("W %d", w_fd[i]);
-        //read/write on pipes using fread/fwrite after fdopen(3) to wrap pipe file descriptors in FILE objects
 
+/*
 if(state[i]==WORKER_IDLE){
         struct problem* new_problem;
         if ((new_problem = get_problem_variant(workers, 0)) == NULL) { // no more problems to solve
@@ -214,32 +189,9 @@ if(state[i]==WORKER_IDLE){
 
         } else { // repeatedly assign problems to idle workers
             // write header sizeof(struct problem)
-            if((out = fdopen(w_fd[i], "w")) == NULL) { // write problem
-                perror("master unable to create output stream");
-                exit(1);
-            } // close *************
-            fwrite(new_problem, sizeof(struct problem), 1, out);
-            if(ferror(out)) { //ferror
-                //close
-                exit(EXIT_FAILURE);
-            }
-            // write data bytes
-            fwrite(new_problem->data, new_problem->size - sizeof(struct problem), 1, out);
-            if(ferror(out)) { //ferror
-                //close
-                exit(EXIT_FAILURE);
-            }
-
-            //fflush after entire problem is written
-            if(fflush(out) == EOF) {
-                perror("fflush error");
-                exit(EXIT_FAILURE);
-            }
-            sf_send_problem(pid[i], new_problem);
-
         }
 }
-}*/
+*/
         /* READ RESULT
         if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
             perror("master unable to create input stream");
@@ -251,8 +203,7 @@ if(state[i]==WORKER_IDLE){
         // write fixed size problem header into pipe
             // continue to write problem data
             //**
-            // until all workers become idle amd NULL return from get_problem_variant()
-                //get_problem_variant == NULL = no more problems to solve
+            // until all workers become idle and NULL return from get_problem_variant() = no more problems to solve
             // send SIGTERM to each worker
         //(all workers terminated)
         // terminate master process done = 1
@@ -260,15 +211,15 @@ if(state[i]==WORKER_IDLE){
                 //exit(EXIT_FAILURE)
     }
 
-            // reap should not crash
-            // use post_result
-            // send SIGTERM and SIGHUP to worker
-            // fclose
-            // set SIGCONT for worker
-            // use event functions
-            // fflush/fclose check return for errors - ferror
-            //ERRORS catch
-            //worker status/STATE
+        // reap should not crash
+        // use post_result
+        // send SIGTERM and SIGHUP to worker
+        // fclose
+        // set SIGCONT for worker
+        // use event functions
+        // fflush/fclose check return for errors - ferror
+        //ERRORS catch
+        //worker status/STATE
 
 
     sf_end(); // master process is about to terminate
