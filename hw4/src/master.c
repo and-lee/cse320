@@ -36,16 +36,16 @@ void child_handler(int sig) {
         int prev_state = state[index];
         // change state
         if(prev_state  == WORKER_STARTED) {
-            state[index] =  WORKER_IDLE; // set state = STARTED
+            state[index] = WORKER_IDLE; // set state = STARTED
         }
         if(prev_state  == WORKER_IDLE) {
-            state[index] =  WORKER_CONTINUED; // set state = STARTED
+            state[index] =  WORKER_CONTINUED; // set state = CONTINUED
         }
         if(prev_state  == WORKER_CONTINUED) {
-            state[index] =  WORKER_RUNNING; // set state = STARTED
+            state[index] = WORKER_RUNNING; // set state = RUNNING
         }
         if(prev_state  == WORKER_RUNNING) {
-            state[index] =  WORKER_STOPPED; // set state = STARTED
+            state[index] = WORKER_STOPPED; // set state = STOPPED
         }
 
 
@@ -137,10 +137,12 @@ int master(int workers) {
         if(get_problem_variant(workers, 0)) {
             for(i = 0; i < workers; i++) {
                 //debug("state = %d i = %d", state[i], i);
+
                 if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
+                    // write header sizeof(struct problem)
                     struct problem* new_problem;
                     new_problem = get_problem_variant(workers, i);
-                    // write header sizeof(struct problem)
+                    //sf_send_problem(w_id[i], get_problem_variant(workers, i));
                     //debug("F %d", w_fd[i]);
                     if((out = fdopen(w_fd[i], "w")) == NULL) { // write problem
                         perror("master unable to create output stream");
@@ -163,16 +165,28 @@ int master(int workers) {
                         perror("fflush error");
                         exit(EXIT_FAILURE);
                     }
-                    //debug("W_ID %d, i = %d", w_id[i], i);
-                    sf_send_problem(w_id[i], new_problem);
-                    kill(SIGCONT, w_id[i]); // SIGCONT *****
-                    state[i] = WORKER_CONTINUED;
+                    sf_send_problem(w_id[i], get_problem_variant(workers, i));
 
-                    //exit(1);
+                    debug("W_ID %d, i = %d", w_id[i], i);
+                    kill(w_id[i], SIGCONT); // SIGCONT
+                    state[i] = WORKER_CONTINUED;
+                    sf_change_state(w_id[i], WORKER_IDLE, state[i]);
 
                 }
-    }
-}
+
+            }
+        }
+        for(i = 0; i < workers; i++) {
+            // if state = stopped
+            // read result. = 0
+            /* READ RESULT
+            if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
+                perror("master unable to create input stream");
+                exit(1);
+            }*/
+            // change to idle
+        }
+        // all workers are idle = end/leave while loop
 
 
 /*
@@ -192,11 +206,7 @@ if(state[i]==WORKER_IDLE){
         }
 }
 */
-        /* READ RESULT
-        if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
-            perror("master unable to create input stream");
-            exit(1);
-        }*/
+
 
         // repeatedly assign problems to idle workers
             // and posts results received from workers post_result
@@ -215,12 +225,9 @@ if(state[i]==WORKER_IDLE){
         // use post_result
         // send SIGTERM and SIGHUP to worker
         // fclose
-        // set SIGCONT for worker
         // use event functions
         // fflush/fclose check return for errors - ferror
         //ERRORS catch
-        //worker status/STATE
-
 
     sf_end(); // master process is about to terminate
     return EXIT_FAILURE;
