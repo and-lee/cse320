@@ -11,6 +11,7 @@
 volatile sig_atomic_t done;
 volatile sig_atomic_t state[MAX_WORKERS];
 volatile sig_atomic_t w_id[MAX_WORKERS];
+struct problem* new_problem;
 
 int get_w_index(int pid) {
     for(int j = 0; j < MAX_WORKERS; j++) {
@@ -76,7 +77,7 @@ int master(int workers) {
     int w_to_m_fd[2];
     //char buff [100];
 
-    FILE /* *in,*/ *out;
+    FILE *in, *out;
 
     pid_t pid[workers];
     int i;
@@ -116,8 +117,15 @@ int master(int workers) {
             execl("bin/polya_worker", "polya_worker", NULL);
             //CATCH ERRORS // *****************
             //exit(0); // ********
+
         } else {
-            state[i] = WORKER_STARTED;
+            // block all signals ***************
+
+            sf_change_state(w_id[i], 0, WORKER_STARTED);
+            state[i] = WORKER_STARTED; // get_w_index(w_id[i])******************
+
+            // unblock *******************
+
             w_id[i] = pid[i];
             debug("Started worker %d, id = %d in = %d out = %d", i, w_id[i], w_fd[i], r_fd[i]);
             // parent
@@ -140,7 +148,7 @@ int master(int workers) {
 
                 if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
                     // write header sizeof(struct problem)
-                    struct problem* new_problem;
+                    // struct problem* new_problem; *************
                     new_problem = get_problem_variant(workers, i);
                     //sf_send_problem(w_id[i], get_problem_variant(workers, i));
                     //debug("F %d", w_fd[i]);
@@ -169,66 +177,99 @@ int master(int workers) {
 
                     debug("W_ID %d, i = %d", w_id[i], i);
                     kill(w_id[i], SIGCONT); // SIGCONT
-                    state[i] = WORKER_CONTINUED;
-                    sf_change_state(w_id[i], WORKER_IDLE, state[i]);
+                    // block all signals ***************
+
+                    sf_change_state(w_id[i], WORKER_IDLE, WORKER_CONTINUED);
+                    state[get_w_index(w_id[i])] = WORKER_CONTINUED; // state[i] *********
+                    // unblock *******************
 
                 }
 
+                if(state[i] == WORKER_STOPPED) { // worker done solving
+                    // read result
+                    if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
+                        perror("master unable to create input stream");
+                        exit(1);
+                    } // close ***************
+
+                    struct result* worker_result = malloc(sizeof(struct result));
+                    fread(worker_result, sizeof(struct result), 1, in);
+                    // ferror
+                    if(ferror(in)) {
+                        exit(EXIT_FAILURE);;
+                    }
+                    if(fflush(in) == EOF) {
+                        perror("fflush error");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    if(worker_result->failed == 0) { // post results if solution is not failed, = 0
+                        // post result
+                        post_result(worker_result, new_problem);
+                        sf_recv_result(w_id[i], worker_result);
+
+                        // if result is a valid solution, cancel other workers and move onto next problem
+                        for(int k = 0; k < workers; k++) { //for rest of workers **************************************
+                            kill(w_id[k], SIGHUP);
+                            // change to idle
+                            // block all signals ***************
+
+                            sf_cancel(w_id[k]);
+                            state[get_w_index(w_id[k])] = WORKER_IDLE; // state[k] ********* **includes itself = redundant ****
+                            // unblock *******************
+
+                        }
+
+                    }
+                    free(worker_result);
+                    // change worker to idle
+                    // block all signals ***************
+
+                    sf_change_state(w_id[i], state[get_w_index(w_id[i])], WORKER_IDLE);
+                    state[get_w_index(w_id[i])] = WORKER_IDLE; // state[i] *********
+                    // unblock *******************
+
+
+                }
+
+
             }
-        }
-        for(i = 0; i < workers; i++) {
-            // if state = stopped
-            // read result. = 0
-            /* READ RESULT
-            if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
-                perror("master unable to create input stream");
-                exit(1);
-            }*/
-            // change to idle
-        }
-        // all workers are idle = end/leave while loop
 
 
-/*
-if(state[i]==WORKER_IDLE){
-        struct problem* new_problem;
-        if ((new_problem = get_problem_variant(workers, 0)) == NULL) { // no more problems to solve
+        } else { // get_problem_variant == NULL = no more workers
             debug("no more problems to solve");
-            // terminate all workers = send SIGTERM to each worker
-            kill(pid[i], SIGTERM);
-            kill(pid[i], SIGCONT);
-            done = 1; // terminate master process
-            //exit EXIT_STATUS - outside while loop? *****
-            exit(EXIT_SUCCESS); // = all workers terminated normally
+            for(int j = 0; j < workers; j++) {
+                if(state[j] == WORKER_STOPPED) {
+                    // change worker to idle
+                    // block all signals ***************
 
-        } else { // repeatedly assign problems to idle workers
-            // write header sizeof(struct problem)
+                    sf_change_state(w_id[j], WORKER_STOPPED, WORKER_IDLE);
+                    state[j] = WORKER_IDLE; // state[i] *********
+                    // unblock *******************
+
+                }
+                if(state[j] == WORKER_IDLE) { // all workers are idle
+                    // terminate all workers = send SIGTERM to each worker
+                    kill(w_id[j], SIGTERM);
+                    kill(w_id[j], SIGCONT);
+                    sf_change_state(w_id[j], state[j], WORKER_EXITED);
+
+                }
+            }
+            // all children are terminated. terminate the main program
+            debug("ending - success");
+            sf_end(); // master process is about to terminate
+            exit(EXIT_SUCCESS);
         }
-}
-*/
-
-
-        // repeatedly assign problems to idle workers
-            // and posts results received from workers post_result
-        // write fixed size problem header into pipe
-            // continue to write problem data
-            //**
-            // until all workers become idle and NULL return from get_problem_variant() = no more problems to solve
-            // send SIGTERM to each worker
-        //(all workers terminated)
-        // terminate master process done = 1
-            //exit(EXIT_SUCCESS) = all workers terminated normally
-                //exit(EXIT_FAILURE)
     }
 
-        // reap should not crash
-        // use post_result
-        // send SIGTERM and SIGHUP to worker
-        // fclose
-        // use event functions
-        // fflush/fclose check return for errors - ferror
-        //ERRORS catch
 
+    // reap should not crash
+    // fclose
+    // use event functions
+    // fflush/fclose check return for errors - ferror
+    //ERRORS catch
+    debug("ending - failure");
     sf_end(); // master process is about to terminate
     return EXIT_FAILURE;
 }
