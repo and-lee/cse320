@@ -138,7 +138,7 @@ int master(int workers) {
             close(w_to_m_fd[0]);
 
             //execute worker program with exec(3) - stops and waits for SIGCONT
-            debug("Starting worker %d", i);
+            debug("exec worker %d", i);
             execl("bin/polya_worker", "polya_worker", NULL);
 
 
@@ -155,16 +155,17 @@ int master(int workers) {
             // unblock
             sigprocmask(SIG_SETMASK, &prev, NULL);
             debug("Starting worker %d, id = %d in = %d out = %d", i, w_id[i], w_fd[i], r_fd[i]);
+            sigset_t new_mask;
+            sigfillset(&new_mask);
+            sigdelset(&new_mask, SIGCHLD);
+            // sigspend
+            sigsuspend(&new_mask);
 
         }
     }
 
 //debug("parent id - %d", (int)getpid());
-/*sigset_t new_mask;
-                    sigfillset(&new_mask);
-                    sigdelset(&new_mask, SIGCHLD);
-                    // sigspend
-                    sigsuspend(&new_mask);*/
+
     // main loop
     while(1) {
         // if problems exist
@@ -289,10 +290,10 @@ int master(int workers) {
                 if(state[j] == WORKER_IDLE) { // all workers are idle
                     // terminate all workers = send SIGTERM to each worker
                     debug("TERM %d", j);
+                    sigset_t new_mask;
                     //kill(w_id[j], SIGTERM);
 
                     kill(w_id[j], SIGCONT);
-                    sigset_t new_mask;
                     sigfillset(&new_mask);
                     sigdelset(&new_mask, SIGCHLD);
                     // sigspend
@@ -322,8 +323,8 @@ int master(int workers) {
             }
             // all children are terminated. terminate the main program
             debug("ending - success");
-            fclose(in);
-            fclose(out);
+            //fclose(in);
+            //fclose(out);
 
             sf_end(); // master process is about to terminate
             exit(EXIT_SUCCESS); // return EXIT_SUCCESS;
