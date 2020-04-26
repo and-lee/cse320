@@ -270,6 +270,9 @@ int master(int workers) {
                     // state = exited
                     kill(w_id[j], SIGCONT);
                 }
+                if(state[j] == WORKER_ABORTED) {
+                    exit(EXIT_FAILURE);
+                }
             }
             // all children are terminated. terminate the main program
             debug("ending - success");
