@@ -248,7 +248,7 @@ int master(int workers) {
                         for(int k = 0; k < workers; k++) {
                             if(k != i) { // cancel other workers
                                 sf_cancel(w_id[k]);
-
+                                kill(w_id[k], SIGHUP);
 
                                 // change to idle
                                 // block all signals
@@ -259,7 +259,7 @@ int master(int workers) {
                             }
                         }
                     }
-                    free(worker_result);
+                    //free(worker_result);
                     // change worker to idle
                     //kill(w_id[i], SIGSTOP); // *************************************
                     // block all signals
@@ -274,6 +274,7 @@ int master(int workers) {
 
         } else { // get_problem_variant == NULL = no more workers
             debug("no more problems to solve");
+int c = 0;
             for(int j = 0; j < workers; j++) {
                 if(state[j] == WORKER_STOPPED) {
                     // change worker to idle
@@ -285,27 +286,46 @@ int master(int workers) {
                     sigprocmask(SIG_SETMASK, &prev, NULL);
 
                 }
+
                 debug("worker %d - status %d", j, state[j]);
 
                 if(state[j] == WORKER_IDLE) { // all workers are idle
                     // terminate all workers = send SIGTERM to each worker
                     debug("TERM %d", j);
+
+
+//sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[j], SIGTERM);
+//sigprocmask(SIG_SETMASK, &prev, NULL);
+
+
+                    //sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[j], SIGCONT);
-                    sigset_t new_mask;
-                    sigfillset(&new_mask);
-                    sigdelset(&new_mask, SIGCHLD);
+                    //sigprocmask(SIG_SETMASK, &prev, NULL);
+
+                    sigset_t new_mask2;
+                    sigfillset(&new_mask2);
+                    sigdelset(&new_mask2, SIGCHLD);
                     // sigspend
-                    sigsuspend(&new_mask);
+                    sigsuspend(&new_mask2);
+                }
+                if(state[j]== WORKER_ABORTED) {
+                    debug("HAS ABORT");
+                    sf_end(); // master process is about to terminate
+                    return EXIT_FAILURE;
+                }
+                if(state[j] == WORKER_EXITED) {
+                    c = c+1;
+                    debug("workers exited %d", c);
                 }
             }
 
-            sigset_t new_mask;
+            /*sigset_t new_mask;
             sigfillset(&new_mask);
-            sigdelset(&new_mask, SIGCHLD);
+            sigdelset(&new_mask, SIGTERM);
             // sigspend
-            sigsuspend(&new_mask);
-            for(int o = 0; o < workers; o ++) {
+            sigsuspend(&new_mask);*/
+            /*for(int o = 0; o < workers; o ++) {
                 if(state[o] == WORKER_ABORTED) {
                     debug("HAS ABORT");
                     sf_end(); // master process is about to terminate
@@ -317,14 +337,21 @@ int master(int workers) {
                     sf_end(); // master process is about to terminate
                     return EXIT_FAILURE;
                 }
-            }
-            // all children are terminated. terminate the main program
-            debug("ending - success");
-            //fclose(in);
-            //fclose(out);
+            }*/
+            if(c == workers) { // all children are terminated. terminate the main program
+                debug("ending - success");
+                //fclose(in);
+                //fclose(out);
 
-            sf_end(); // master process is about to terminate
-            exit(EXIT_SUCCESS); // return EXIT_SUCCESS;
+                sf_end(); // master process is about to terminate
+                exit(EXIT_SUCCESS); // return EXIT_SUCCESS;
+            } else {
+                debug("ending - fail");
+
+                sf_end(); // master process is about to terminate
+                exit(EXIT_FAILURE);
+            }
+
         }
     }
 
