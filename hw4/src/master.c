@@ -29,7 +29,7 @@ void child_handler(int sig) {
     int olderrno = errno;
     pid_t pid;
     int status;
-    if ((pid = waitpid(-1, &status, WSTOPPED | WCONTINUED | WNOHANG)) != 0) {
+    while((pid = waitpid(-1, &status, WSTOPPED | WCONTINUED | WNOHANG)) > 0) {
         if(pid < 0) {
             perror("wait error");
         }
@@ -44,7 +44,7 @@ void child_handler(int sig) {
                 state[index] = WORKER_IDLE; // set state = IDLE
                 sf_change_state(pid, prev_state , state[index]);
             }
-            else if(prev_state == WORKER_RUNNING) {
+            else /*if(prev_state == WORKER_RUNNING)*/ {
                 state[index] = WORKER_STOPPED; // set state = STOPPED
                 sf_change_state(pid, prev_state , state[index]);
             }
@@ -290,17 +290,9 @@ int master(int workers) {
                 if(state[j] == WORKER_IDLE) { // all workers are idle
                     // terminate all workers = send SIGTERM to each worker
                     debug("TERM %d", j);
-                    sigset_t new_mask;
-                    //kill(w_id[j], SIGTERM);
-
-                    kill(w_id[j], SIGCONT);
-                    sigfillset(&new_mask);
-                    sigdelset(&new_mask, SIGCHLD);
-                    // sigspend
-                    sigsuspend(&new_mask);
-
                     kill(w_id[j], SIGTERM);
                     kill(w_id[j], SIGCONT);
+                    sigset_t new_mask;
                     sigfillset(&new_mask);
                     sigdelset(&new_mask, SIGCHLD);
                     // sigspend
@@ -308,6 +300,11 @@ int master(int workers) {
                 }
             }
 
+            sigset_t new_mask;
+            sigfillset(&new_mask);
+            sigdelset(&new_mask, SIGCHLD);
+            // sigspend
+            sigsuspend(&new_mask);
             for(int o = 0; o < workers; o ++) {
                 if(state[o] == WORKER_ABORTED) {
                     debug("HAS ABORT");
