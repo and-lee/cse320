@@ -12,6 +12,7 @@ volatile sig_atomic_t done;
 volatile sig_atomic_t state[MAX_WORKERS];
 volatile sig_atomic_t w_id[MAX_WORKERS];
 struct problem* new_problem;
+struct result* worker_result;
 
 int get_w_index(int pid) {
     for(int j = 0; j < MAX_WORKERS; j++) {
@@ -55,8 +56,11 @@ void child_handler(int sig) {
             debug("EXITED");
             state[index] = WORKER_EXITED;
         }
-
-// exited abnormally
+        else if(WIFSIGNALED(status)) {
+            debug("ABORTED");
+            // exited abnormally
+            state[index] =  WORKER_ABORTED; // set state = RUNNING
+        }
 
         sf_change_state(pid, prev_state , state[index]);
     }
@@ -154,6 +158,7 @@ int master(int workers) {
                 if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
                     // write header sizeof(struct problem)
                     // struct problem* new_problem; *************
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
                     new_problem = get_problem_variant(workers, i);
                     //debug("F %d", w_fd[i]);
                     if((out = fdopen(w_fd[i], "w")) == NULL) { // write problem
@@ -172,6 +177,7 @@ int master(int workers) {
                         //close
                         exit(EXIT_FAILURE);
                     }
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
 
                     //fflush after entire problem is written
                     if(fflush(out) == EOF) {
@@ -193,12 +199,13 @@ int master(int workers) {
 
                 if(state[i] == WORKER_STOPPED) { // worker done solving
                     // read result
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
                     if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
                         perror("master unable to create input stream");
                         exit(1);
                     } // close ***************
 
-                    struct result* worker_result = malloc(sizeof(struct result));
+                    worker_result = malloc(sizeof(struct result));
                     fread(worker_result, sizeof(struct result), 1, in);
                     // ferror
                     if(ferror(in)) {
@@ -210,6 +217,7 @@ int master(int workers) {
                     }
                     worker_result = realloc(worker_result, worker_result->size);
                     fread(worker_result->data, worker_result->size - sizeof(struct result), 1, in);
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
                     sf_recv_result(w_id[i], worker_result);
 
                     // post result
