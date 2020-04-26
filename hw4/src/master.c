@@ -27,7 +27,8 @@ void child_handler(int sig) {
     debug("SIGCHLD");
     int olderrno = errno;
     pid_t pid;
-    if ((pid = waitpid(-1, NULL, WSTOPPED | WCONTINUED | WNOHANG)) != 0) {
+    int status;
+    if ((pid = waitpid(-1, &status, WSTOPPED | WCONTINUED | WNOHANG)) != 0) {
         if(pid < 0) {
             perror("wait error");
         }
@@ -36,19 +37,26 @@ void child_handler(int sig) {
 
         int prev_state = state[index];
         // change state
-        if(prev_state  == WORKER_STARTED) {
-            state[index] = WORKER_IDLE; // set state = STARTED
+        if(WIFSTOPPED(status)) {
+            debug("STOPPED");
+            if(prev_state == WORKER_STARTED) {
+                state[index] = WORKER_IDLE; // set state = IDLE
+            }
+            else if(prev_state == WORKER_RUNNING) {
+                state[index] = WORKER_STOPPED; // set state = STOPPED
+            }
         }
-        if(prev_state  == WORKER_IDLE) {
-            state[index] =  WORKER_CONTINUED; // set state = CONTINUED
+        else if(WIFCONTINUED(status)) {
+            debug("CONTINUED");
+            // prev_state == WORKER_CONTINUED
+            state[index] =  WORKER_RUNNING; // set state = RUNNING
         }
-        if(prev_state  == WORKER_CONTINUED) {
-            state[index] = WORKER_RUNNING; // set state = RUNNING
-        }
-        if(prev_state  == WORKER_RUNNING) {
-            state[index] = WORKER_STOPPED; // set state = STOPPED
+        else if(WIFEXITED(status)) {
+            debug("EXITED");
+            state[index] = WORKER_EXITED;
         }
 
+// exited abnormally
 
         sf_change_state(pid, prev_state , state[index]);
     }
@@ -69,19 +77,22 @@ int master(int workers) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, child_handler); // install SIGCHLD handler
 
-    // create new file objects
+    sigset_t mask;
+    sigset_t prev;
+    sigfillset(&mask);
+
+    // fds for each worker
     int r_fd[workers];
     int w_fd[workers];
 
     int m_to_w_fd[2];
     int w_to_m_fd[2];
-    //char buff [100];
 
+    // create new file objects
     FILE *in, *out;
 
     pid_t pid[workers];
     int i;
-
     for(i = 0; i < workers; i++) {
         // create 2 pipes for each worker
         // use pipe(2) before worker process is forked using fork(2)
@@ -103,14 +114,12 @@ int master(int workers) {
         // WORKER/CHILD
         else if(pid[i] == 0) { // create workers/child
             debug("created new worker %d", (int)getpid());
-            close(w_fd[i]); // close write side of pipe
-            close(r_fd[i]); // close read side of pipe
 
             //(after fork) redirect stdin and stdout to pipes with dup(2)
             dup2(m_to_w_fd[0], 0); // stdin
-            close(m_to_w_fd[0]);
+            close(m_to_w_fd[1]);
             dup2(w_to_m_fd[1], 1); // stdout
-            close(w_to_m_fd[1]);
+            close(w_to_m_fd[0]);
 
             //execute worker program with exec(3) - stops and waits for SIGCONT
             debug("Starting worker %d", i);
@@ -119,18 +128,19 @@ int master(int workers) {
             //exit(0); // ********
 
         } else {
-            // block all signals ***************
-
-            sf_change_state(w_id[i], 0, WORKER_STARTED);
-            state[i] = WORKER_STARTED; // get_w_index(w_id[i])******************
-
-            // unblock *******************
+            // parent
+            close(m_to_w_fd[0]); // close read side of pipe //close(r_fd[i]); // ****************
+            close(w_to_m_fd[1]); // close write side of pipe //close(w_fd[i]); // ***************
 
             w_id[i] = pid[i];
+            // block all signals
+            sigprocmask(SIG_BLOCK, &mask, &prev);
+            sf_change_state(pid[i], 0, WORKER_STARTED);
+            state[i] = WORKER_STARTED; // get_w_index(w_id[i])******************
+            // unblock
+            sigprocmask(SIG_SETMASK, &prev, NULL);
             debug("Started worker %d, id = %d in = %d out = %d", i, w_id[i], w_fd[i], r_fd[i]);
-            // parent
-            close(m_to_w_fd[0]); // close read side of pipe
-            close(w_to_m_fd[1]); // close write side of pipe
+
         }
     }
 
@@ -138,19 +148,13 @@ int master(int workers) {
 
     // main loop
     while(1) {
-        //debug("parent id - %d", (int)getpid());
-        //debug("ccount - %d", ccount);
-
         // if problems exist
         if(get_problem_variant(workers, 0)) {
             for(i = 0; i < workers; i++) {
-                //debug("state = %d i = %d", state[i], i);
-
                 if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
                     // write header sizeof(struct problem)
                     // struct problem* new_problem; *************
                     new_problem = get_problem_variant(workers, i);
-                    //sf_send_problem(w_id[i], get_problem_variant(workers, i));
                     //debug("F %d", w_fd[i]);
                     if((out = fdopen(w_fd[i], "w")) == NULL) { // write problem
                         perror("master unable to create output stream");
@@ -161,6 +165,7 @@ int master(int workers) {
                         //close
                         exit(EXIT_FAILURE);
                     }
+                    new_problem = realloc(new_problem, new_problem->size);
                     // write data bytes
                     fwrite(new_problem->data, new_problem->size - sizeof(struct problem), 1, out);
                     if(ferror(out)) { //ferror
@@ -177,11 +182,12 @@ int master(int workers) {
 
                     debug("W_ID %d, i = %d", w_id[i], i);
                     kill(w_id[i], SIGCONT); // SIGCONT
-                    // block all signals ***************
-
+                    // block all signals
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
                     sf_change_state(w_id[i], WORKER_IDLE, WORKER_CONTINUED);
                     state[get_w_index(w_id[i])] = WORKER_CONTINUED; // state[i] *********
-                    // unblock *******************
+                    // unblock
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
 
                 }
 
@@ -202,62 +208,66 @@ int master(int workers) {
                         perror("fflush error");
                         exit(EXIT_FAILURE);
                     }
+                    worker_result = realloc(worker_result, worker_result->size);
+                    fread(worker_result->data, worker_result->size - sizeof(struct result), 1, in);
+                    sf_recv_result(w_id[i], worker_result);
 
-                    if(worker_result->failed == 0) { // post results if solution is not failed, = 0
-                        // post result
-                        post_result(worker_result, new_problem);
-                        sf_recv_result(w_id[i], worker_result);
-
+                    // post result
+                    if(post_result(worker_result, new_problem) == 0) { // post results if solution is not failed, = 0
                         // if result is a valid solution, cancel other workers and move onto next problem
-                        for(int k = 0; k < workers; k++) { //for rest of workers **************************************
-                            kill(w_id[k], SIGHUP);
-                            // change to idle
-                            // block all signals ***************
+                        for(int k = 0; k < workers; k++) {
+                            if(k != i) { // cancel other workers
+                                sf_cancel(w_id[k]);
+                                kill(w_id[k], SIGHUP);
 
-                            sf_cancel(w_id[k]);
-                            state[get_w_index(w_id[k])] = WORKER_IDLE; // state[k] ********* **includes itself = redundant ****
-                            // unblock *******************
-
+                                // change to idle
+                                // block all signals
+                                sigprocmask(SIG_BLOCK, &mask, &prev);
+                                state[get_w_index(w_id[k])] = WORKER_IDLE; // state[k] ********* **includes itself = redundant ****
+                                // unblock
+                                sigprocmask(SIG_SETMASK, &prev, NULL);
+                            }
                         }
-
                     }
                     free(worker_result);
                     // change worker to idle
-                    // block all signals ***************
-
+                    kill(w_id[i], SIGSTOP);
+                    // block all signals
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
                     sf_change_state(w_id[i], state[get_w_index(w_id[i])], WORKER_IDLE);
                     state[get_w_index(w_id[i])] = WORKER_IDLE; // state[i] *********
-                    // unblock *******************
-
+                    // unblock
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
 
                 }
-
-
             }
-
 
         } else { // get_problem_variant == NULL = no more workers
             debug("no more problems to solve");
             for(int j = 0; j < workers; j++) {
                 if(state[j] == WORKER_STOPPED) {
                     // change worker to idle
-                    // block all signals ***************
-
+                    // block all signals
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
                     sf_change_state(w_id[j], WORKER_STOPPED, WORKER_IDLE);
                     state[j] = WORKER_IDLE; // state[i] *********
-                    // unblock *******************
+                    // unblock
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
 
                 }
                 if(state[j] == WORKER_IDLE) { // all workers are idle
                     // terminate all workers = send SIGTERM to each worker
+                    debug("TERM");
                     kill(w_id[j], SIGTERM);
+                    // state = exited
                     kill(w_id[j], SIGCONT);
-                    sf_change_state(w_id[j], state[j], WORKER_EXITED);
-
                 }
             }
             // all children are terminated. terminate the main program
             debug("ending - success");
+            fclose(in);
+            fclose(out);
+
             sf_end(); // master process is about to terminate
             exit(EXIT_SUCCESS);
         }
@@ -270,6 +280,9 @@ int master(int workers) {
     // fflush/fclose check return for errors - ferror
     //ERRORS catch
     debug("ending - failure");
+    fclose(in);
+    fclose(out);
+
     sf_end(); // master process is about to terminate
     return EXIT_FAILURE;
 }
