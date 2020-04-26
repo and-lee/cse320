@@ -177,13 +177,12 @@ int master(int workers) {
                         //close
                         exit(EXIT_FAILURE);
                     }
-                    sigprocmask(SIG_SETMASK, &prev, NULL);
-
                     //fflush after entire problem is written
                     if(fflush(out) == EOF) {
                         perror("fflush error");
                         exit(EXIT_FAILURE);
                     }
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
                     sf_send_problem(w_id[i], get_problem_variant(workers, i));
 
                     debug("W_ID %d, i = %d", w_id[i], i);
