@@ -63,6 +63,7 @@ void child_handler(int sig) {
                 state[index] = WORKER_ABORTED;
                 sf_change_state(pid, prev_state , state[index]);
             } else {
+                debug("set exit status");
                 state[index] = WORKER_EXITED;
                 sf_change_state(pid, prev_state , state[index]);
             }
@@ -72,6 +73,8 @@ void child_handler(int sig) {
             // exited abnormally
             state[index] =  WORKER_ABORTED; // set state = RUNNING
             sf_change_state(pid, prev_state , state[index]);
+        } else {
+            debug("no change");
         }
 
     }
@@ -172,6 +175,7 @@ int master(int workers) {
         // if problems exist
         if(get_problem_variant(workers, 0)) {
             for(i = 0; i < workers; i++) {
+                //
                 if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
                     // write header sizeof(struct problem)
                     // struct problem* new_problem; *************
@@ -239,6 +243,7 @@ int master(int workers) {
                         worker_result = realloc(worker_result, worker_result->size);
                         fread(worker_result->data, worker_result->size - sizeof(struct result), 1, in);
                     }
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
 
                     // post result
                     if(post_result(worker_result, new_problem) == 0) { // post results if solution is not failed, = 0
@@ -251,6 +256,14 @@ int master(int workers) {
                                 kill(w_id[k], SIGHUP);
                                 sigprocmask(SIG_SETMASK, &prev, NULL);
 
+                                /*
+                                sigset_t new_mask;
+                                sigfillset(&new_mask);
+                                sigdelset(&new_mask, SIGCHLD);
+                                // sigspend
+                                sigsuspend(&new_mask);
+                                */
+
                                 // change to idle
                                 // block all signals
                                 sigprocmask(SIG_BLOCK, &mask, &prev);
@@ -260,11 +273,9 @@ int master(int workers) {
                             }
                         }
                     }
-
-                    sigprocmask(SIG_SETMASK, &prev, NULL);
+                    //sigprocmask(SIG_SETMASK, &prev, NULL);
 
                     sf_recv_result(w_id[i], worker_result);
-                    //free(worker_result);
                     // change worker to idle
                     //kill(w_id[i], SIGSTOP); // *
                     // block all signals
@@ -300,22 +311,30 @@ int master(int workers) {
 
                     sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[j], SIGTERM);
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[j], SIGCONT);
                     sigprocmask(SIG_SETMASK, &prev, NULL);
 
-                    sigset_t new_mask;
-                    sigfillset(&new_mask);
-                    sigdelset(&new_mask, SIGCHLD);
-                    // sigspend
-                    sigsuspend(&new_mask);
-
+                    //sigprocmask(SIG_BLOCK, &mask, &prev);
                     if(state[j] != WORKER_EXITED) {
-                        //sigset_t new_mask;
+                        debug("wait 1");
+                        sigset_t new_mask;
                         sigfillset(&new_mask);
                         sigdelset(&new_mask, SIGCHLD);
                         // sigspend
                         sigsuspend(&new_mask);
                     }
+
+                    if(state[j] != WORKER_EXITED) {
+                        debug("wait 2");
+                        sigset_t new_mask;
+                        sigfillset(&new_mask);
+                        sigdelset(&new_mask, SIGCHLD);
+                        // sigspend
+                        sigsuspend(&new_mask);
+                    }
+                    //sigprocmask(SIG_SETMASK, &prev, NULL);
 
                 }
 
