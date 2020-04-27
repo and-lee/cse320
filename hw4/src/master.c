@@ -8,11 +8,11 @@
 #include "debug.h"
 #include "polya.h"
 
-volatile sig_atomic_t done;
 volatile sig_atomic_t state[MAX_WORKERS];
 volatile sig_atomic_t w_id[MAX_WORKERS];
 struct problem* new_problem;
 struct result* worker_result;
+volatile sig_atomic_t count = 0;
 
 int get_w_index(int pid) {
     for(int j = 0; j < MAX_WORKERS; j++) {
@@ -29,7 +29,7 @@ void child_handler(int sig) {
     int olderrno = errno;
     pid_t pid;
     int status;
-    while((pid = waitpid(-1, &status, WSTOPPED | WCONTINUED | WNOHANG)) > 0) {
+    while((pid = waitpid(-1, &status, WUNTRACED | WCONTINUED | WNOHANG)) > 0) {
         if(pid < 0) {
             perror("wait error");
         }
@@ -116,7 +116,7 @@ int master(int workers) {
             //send results from worker to master
         if((pipe(m_to_w_fd) < 0) || (pipe(w_to_m_fd) < 0)) {
             perror("unable to create pipe");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
         w_fd[i] = m_to_w_fd[1];
         //debug("%d", w_fd[i]);
@@ -125,7 +125,7 @@ int master(int workers) {
 
         if((pid[i] = fork()) < 0) {
             perror("fork error");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
         // WORKER/CHILD
         else if(pid[i] == 0) { // create workers/child
@@ -142,7 +142,7 @@ int master(int workers) {
             execl("bin/polya_worker", "polya_worker", NULL);
 
 
-        } else {
+        } else if(pid[i] > 0) {
             // parent
             close(m_to_w_fd[0]); // close read side of pipe //close(r_fd[i]); // ****************
             close(w_to_m_fd[1]); // close write side of pipe //close(w_fd[i]); // ***************
@@ -155,6 +155,7 @@ int master(int workers) {
             // unblock
             sigprocmask(SIG_SETMASK, &prev, NULL);
             debug("Starting worker %d, id = %d in = %d out = %d", i, w_id[i], w_fd[i], r_fd[i]);
+
             sigset_t new_mask;
             sigfillset(&new_mask);
             sigdelset(&new_mask, SIGCHLD);
@@ -179,26 +180,25 @@ int master(int workers) {
                     //debug("F %d", w_fd[i]);
                     if((out = fdopen(w_fd[i], "w")) == NULL) { // write problem
                         perror("master unable to create output stream");
-                        exit(EXIT_FAILURE);
+                        return EXIT_FAILURE;
                     }
                     fwrite(new_problem, sizeof(struct problem), 1, out);
                     if(ferror(out)) { //ferror
                         //close
                         perror("out problem header ferror");
-                        exit(EXIT_FAILURE);
+                        return EXIT_FAILURE;
                     }
-                    new_problem = realloc(new_problem, new_problem->size);
                     // write data bytes
                     fwrite(new_problem->data, new_problem->size - sizeof(struct problem), 1, out);
                     if(ferror(out)) { //ferror
                         //close
                         perror("out problem data ferror");
-                        exit(EXIT_FAILURE);
+                        return EXIT_FAILURE;
                     }
                     //fflush after entire problem is written
                     if(fflush(out) == EOF) {
                         perror("fflush error");
-                        exit(EXIT_FAILURE);
+                        return EXIT_FAILURE;
                     }
                     sigprocmask(SIG_SETMASK, &prev, NULL);
                     sf_send_problem(w_id[i], get_problem_variant(workers, i));
@@ -220,7 +220,7 @@ int master(int workers) {
                     sigprocmask(SIG_BLOCK, &mask, &prev);
                     if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
                         perror("master unable to create input stream");
-                        exit(EXIT_FAILURE);
+                        return EXIT_FAILURE;
                     }
 
                     worker_result = malloc(sizeof(struct result));
@@ -228,19 +228,17 @@ int master(int workers) {
                     // ferror
                     if(ferror(in)) {
                         perror("in result header ferror");
-                        exit(EXIT_FAILURE);;
+                        return EXIT_FAILURE;
                     }
                     if(fflush(in) == EOF) {
                         perror("fflush error");
-                        exit(EXIT_FAILURE);
+                        return EXIT_FAILURE;
                     }
 
-                    worker_result = realloc(worker_result, worker_result->size);
-                    fread(worker_result->data, worker_result->size - sizeof(struct result), 1, in);
-
-                    sigprocmask(SIG_SETMASK, &prev, NULL);
-
-                    sf_recv_result(w_id[i], worker_result);
+                    if(worker_result->failed == 0) {
+                        worker_result = realloc(worker_result, worker_result->size);
+                        fread(worker_result->data, worker_result->size - sizeof(struct result), 1, in);
+                    }
 
                     // post result
                     if(post_result(worker_result, new_problem) == 0) { // post results if solution is not failed, = 0
@@ -248,7 +246,10 @@ int master(int workers) {
                         for(int k = 0; k < workers; k++) {
                             if(k != i) { // cancel other workers
                                 sf_cancel(w_id[k]);
+
+                                sigprocmask(SIG_BLOCK, &mask, &prev);
                                 kill(w_id[k], SIGHUP);
+                                sigprocmask(SIG_SETMASK, &prev, NULL);
 
                                 // change to idle
                                 // block all signals
@@ -259,6 +260,13 @@ int master(int workers) {
                             }
                         }
                     }
+
+                    //worker_result = realloc(worker_result, worker_result->size);
+                    //fread(worker_result->data, worker_result->size - sizeof(struct result), 1, in);
+
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
+
+                    sf_recv_result(w_id[i], worker_result);
                     //free(worker_result);
                     // change worker to idle
                     //kill(w_id[i], SIGSTOP); // *************************************
@@ -269,12 +277,13 @@ int master(int workers) {
                     // unblock
                     sigprocmask(SIG_SETMASK, &prev, NULL);
 
+
                 }
             }
 
         } else { // get_problem_variant == NULL = no more workers
             debug("no more problems to solve");
-int c = 0;
+
             for(int j = 0; j < workers; j++) {
                 if(state[j] == WORKER_STOPPED) {
                     // change worker to idle
@@ -293,74 +302,57 @@ int c = 0;
                     // terminate all workers = send SIGTERM to each worker
                     debug("TERM %d", j);
 
-
-//sigprocmask(SIG_BLOCK, &mask, &prev);
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[j], SIGTERM);
-//sigprocmask(SIG_SETMASK, &prev, NULL);
-
-
-                    //sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[j], SIGCONT);
-                    //sigprocmask(SIG_SETMASK, &prev, NULL);
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
 
-                    sigset_t new_mask2;
-                    sigfillset(&new_mask2);
-                    sigdelset(&new_mask2, SIGCHLD);
+                    sigset_t new_mask;
+                    sigfillset(&new_mask);
+                    sigdelset(&new_mask, SIGCHLD);
                     // sigspend
-                    sigsuspend(&new_mask2);
+                    sigsuspend(&new_mask);
+
+                    if(state[j] != WORKER_EXITED) {
+                        //sigset_t new_mask;
+                        sigfillset(&new_mask);
+                        sigdelset(&new_mask, SIGCHLD);
+                        // sigspend
+                        sigsuspend(&new_mask);
+                    }
+
                 }
+
+            }
+
+
+            for(int j = 0; j < workers; j++) {
                 if(state[j]== WORKER_ABORTED) {
                     debug("HAS ABORT");
                     sf_end(); // master process is about to terminate
                     return EXIT_FAILURE;
                 }
                 if(state[j] == WORKER_EXITED) {
-                    c = c+1;
-                    debug("workers exited %d", c);
+                    count = count+1;
+                    debug("workers exited %d", count);
                 }
             }
-
-            /*sigset_t new_mask;
-            sigfillset(&new_mask);
-            sigdelset(&new_mask, SIGTERM);
-            // sigspend
-            sigsuspend(&new_mask);*/
-            /*for(int o = 0; o < workers; o ++) {
-                if(state[o] == WORKER_ABORTED) {
-                    debug("HAS ABORT");
-                    sf_end(); // master process is about to terminate
-                    return EXIT_FAILURE;
-                }
-                if(state[o] != WORKER_EXITED) {
-                    debug("NOT EXITED");
-                    debug("worker after %d - status %d", o, state[o]);
-                    sf_end(); // master process is about to terminate
-                    return EXIT_FAILURE;
-                }
-            }*/
-            if(c == workers) { // all children are terminated. terminate the main program
+            if(count == workers) { // all children are terminated. terminate the main program
                 debug("ending - success");
-                //fclose(in);
-                //fclose(out);
-
                 sf_end(); // master process is about to terminate
-                exit(EXIT_SUCCESS); // return EXIT_SUCCESS;
+                return EXIT_SUCCESS; // return EXIT_SUCCESS;
             } else {
                 debug("ending - fail");
-
                 sf_end(); // master process is about to terminate
-                exit(EXIT_FAILURE);
+                return EXIT_FAILURE;
             }
 
         }
     }
 
     // reap should not crash
-    // fclose
-    // use event functions
-    // fflush/fclose check return for errors - ferror
     // ERRORS catch
 
-    //sf_end(); // master process is about to terminate
-    //return EXIT_FAILURE;
+    sf_end(); // master process is about to terminate
+    return EXIT_FAILURE;
 }

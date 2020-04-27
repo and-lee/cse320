@@ -18,7 +18,7 @@ void sigterm_handler(int sig) {
 volatile sig_atomic_t canceled = 0;
 void sighup_handler(int sig) {
     canceled = 1;
-    debug("Received signal 1 - Aborted");
+    debug("Received signal SIGHUP - Canceling problem");
     // stop attempt and send 'failed' "result" to master = ABORTED
 }
 
@@ -35,7 +35,7 @@ int worker(void) {
 
     if(signal(SIGTERM, sigterm_handler) == SIG_ERR) {
         perror("signal error");
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
     sigset_t mask_all, mask_hup, prev_mask;
@@ -44,13 +44,13 @@ int worker(void) {
     sigaddset(&mask_hup, SIGHUP);
     if(signal(SIGHUP, sighup_handler) == SIG_ERR) {
         perror("signal error");
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
     debug("Idling - sent SIGSTOP to itself");
     if(raise(SIGSTOP) != 0) { // IDLE
         perror("raise error");
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
     //SIGCONT = CONTINUED // master
@@ -64,25 +64,25 @@ int worker(void) {
         struct problem* problem_ptr = malloc(sizeof(struct problem)); // allocated space for probem = header + data
         if(problem_ptr == NULL) {
             perror("malloc error");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
         fread(problem_ptr, sizeof(struct problem), 1, stdin);// read stdin to get header
         //ferror - EOF includes short count, which is not an error
         if(ferror(stdin)) {
             perror("fread error");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
         problem_ptr = realloc(problem_ptr, problem_ptr -> size); // realloc size
         if(problem_ptr == NULL) {
-            perror("realloc error");
-            exit(EXIT_FAILURE);
+            perror("w realloc error");
+            return EXIT_FAILURE;
         }
         // continue to read stdin to get 'data' = total size - header size
         fread(problem_ptr->data, (problem_ptr -> size - sizeof(struct problem)), 1, stdin);
         // ferror
         if(ferror(stdin)) {
             perror("fread error");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
 
         debug("Solving Problem");
@@ -110,7 +110,7 @@ int worker(void) {
         }
         if(fflush(stdout) == EOF) {
             perror("fflush error");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
         free(result_ptr);
 
@@ -121,7 +121,7 @@ int worker(void) {
         debug("Stopped");
         if(raise(SIGSTOP) !=0) {
             perror("raise error");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
     }
 
