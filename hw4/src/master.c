@@ -101,7 +101,6 @@ int master(int workers) {
     sigfillset(&mask);
     sigemptyset(&prev);
 
-
     // fds for each worker
     int r_fd[workers];
     int w_fd[workers];
@@ -178,7 +177,6 @@ int master(int workers) {
         if(get_problem_variant(workers, 0)) {
             for(i = 0; i < workers; i++) {
 
-
                 if(state[i] == WORKER_IDLE && get_problem_variant(workers, 0)){ // repeatedly assign problems to idle workers
                     // write header sizeof(struct problem)
                     // struct problem* new_problem; *************
@@ -219,14 +217,10 @@ int master(int workers) {
                     // unblock
                     sigprocmask(SIG_SETMASK, &prev, NULL);
 
-
                     sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[i], SIGCONT); // SIGCONT
                     sigprocmask(SIG_SETMASK, &prev, NULL);
-
-
                 }
-
 
                 if(state[i] == WORKER_STOPPED && get_problem_variant(workers, 0)) { // worker done solving
                     // read result
@@ -292,12 +286,11 @@ int master(int workers) {
 
         } else { // get_problem_variant == NULL = no more workers
             debug("no more problems to solve");
-//sigprocmask(SIG_SETMASK, &prev, NULL);
-while(count!=workers) {
-int j=count;
-            //for(int j = 0; j < workers; j++) {  //**************************
 
-                //debug("BEFORE : worker %d - status %d", j, state[j]);
+            while(count!=workers) {
+                int j=count;
+
+                debug("worker = %d worker status = %d", j, state[j]);
 
                 if(state[j] == WORKER_STOPPED) {
                     // change worker to idle
@@ -349,13 +342,7 @@ int j=count;
                     debug("worker exited = %d count = %d", j,count);
                 }
 
-
-            //}
-
-//debug("worker = %d worker status = %d", j, state[j]);
-
-
-} // while count != workers
+            } // while count != workers
 
 
             for(int j = 0; j < workers; j++) {
@@ -365,7 +352,6 @@ int j=count;
                     return EXIT_FAILURE;
                 }
             }
-
 
             if(count == workers) { // all children are terminated. terminate the main program
                 debug("ending - success");
@@ -377,15 +363,9 @@ int j=count;
                 return EXIT_FAILURE;
             }
 
-
-
-
-
         }
     }
 
-    // reap should not crash
-    // ERRORS catch
 
     sf_end(); // master process is about to terminate
     return EXIT_FAILURE;
