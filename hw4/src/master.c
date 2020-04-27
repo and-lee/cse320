@@ -261,22 +261,18 @@ int master(int workers) {
                         }
                     }
 
-                    //worker_result = realloc(worker_result, worker_result->size);
-                    //fread(worker_result->data, worker_result->size - sizeof(struct result), 1, in);
-
                     sigprocmask(SIG_SETMASK, &prev, NULL);
 
                     sf_recv_result(w_id[i], worker_result);
                     //free(worker_result);
                     // change worker to idle
-                    //kill(w_id[i], SIGSTOP); // *************************************
+                    //kill(w_id[i], SIGSTOP); // *
                     // block all signals
                     sigprocmask(SIG_BLOCK, &mask, &prev);
                     sf_change_state(w_id[i], state[i], WORKER_IDLE);
                     state[i] = WORKER_IDLE;
                     // unblock
                     sigprocmask(SIG_SETMASK, &prev, NULL);
-
 
                 }
             }
