@@ -99,6 +99,8 @@ int master(int workers) {
     sigset_t mask;
     sigset_t prev;
     sigfillset(&mask);
+    sigemptyset(&prev);
+
 
     // fds for each worker
     int r_fd[workers];
@@ -175,8 +177,9 @@ int master(int workers) {
         // if problems exist
         if(get_problem_variant(workers, 0)) {
             for(i = 0; i < workers; i++) {
-                //
-                if(state[i] == WORKER_IDLE){ // repeatedly assign problems to idle workers
+
+
+                if(state[i] == WORKER_IDLE && get_problem_variant(workers, 0)){ // repeatedly assign problems to idle workers
                     // write header sizeof(struct problem)
                     // struct problem* new_problem; *************
                     sigprocmask(SIG_BLOCK, &mask, &prev);
@@ -208,18 +211,24 @@ int master(int workers) {
                     sf_send_problem(w_id[i], get_problem_variant(workers, i));
 
                     debug("W_ID %d, i = %d", w_id[i], i);
-                    kill(w_id[i], SIGCONT); // SIGCONT
+                    //kill(w_id[i], SIGCONT); // SIGCONT
                     // block all signals
                     sigprocmask(SIG_BLOCK, &mask, &prev);
                     sf_change_state(w_id[i], WORKER_IDLE, WORKER_CONTINUED);
                     state[i] = WORKER_CONTINUED;
                     // unblock
                     sigprocmask(SIG_SETMASK, &prev, NULL);
-                    //kill(w_id[i], SIGCONT); // SIGCONT
+
+
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
+                    kill(w_id[i], SIGCONT); // SIGCONT
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
+
 
                 }
 
-                if(state[i] == WORKER_STOPPED) { // worker done solving
+
+                if(state[i] == WORKER_STOPPED && get_problem_variant(workers, 0)) { // worker done solving
                     // read result
                     sigprocmask(SIG_BLOCK, &mask, &prev);
                     if((in = fdopen(r_fd[i], "r")) == NULL) { // read result
@@ -256,14 +265,6 @@ int master(int workers) {
                                 kill(w_id[k], SIGHUP);
                                 sigprocmask(SIG_SETMASK, &prev, NULL);
 
-                                /*
-                                sigset_t new_mask;
-                                sigfillset(&new_mask);
-                                sigdelset(&new_mask, SIGCHLD);
-                                // sigspend
-                                sigsuspend(&new_mask);
-                                */
-
                                 // change to idle
                                 // block all signals
                                 sigprocmask(SIG_BLOCK, &mask, &prev);
@@ -288,10 +289,16 @@ int master(int workers) {
                 }
             }
 
+
         } else { // get_problem_variant == NULL = no more workers
             debug("no more problems to solve");
+//sigprocmask(SIG_SETMASK, &prev, NULL);
+while(count!=workers) {
+int j=count;
+            //for(int j = 0; j < workers; j++) {  //**************************
 
-            for(int j = 0; j < workers; j++) {
+                //debug("BEFORE : worker %d - status %d", j, state[j]);
+
                 if(state[j] == WORKER_STOPPED) {
                     // change worker to idle
                     // block all signals
@@ -300,10 +307,7 @@ int master(int workers) {
                     state[j] = WORKER_IDLE; // state[i] *********
                     // unblock
                     sigprocmask(SIG_SETMASK, &prev, NULL);
-
                 }
-
-                debug("worker %d - status %d", j, state[j]);
 
                 if(state[j] == WORKER_IDLE) { // all workers are idle
                     // terminate all workers = send SIGTERM to each worker
@@ -314,11 +318,11 @@ int master(int workers) {
                     sigprocmask(SIG_SETMASK, &prev, NULL);
                     sigprocmask(SIG_BLOCK, &mask, &prev);
                     kill(w_id[j], SIGCONT);
-                    sigprocmask(SIG_SETMASK, &prev, NULL);
+                    //sigprocmask(SIG_SETMASK, &prev, NULL);
 
                     //sigprocmask(SIG_BLOCK, &mask, &prev);
                     if(state[j] != WORKER_EXITED) {
-                        debug("wait 1");
+                        //debug("wait 1 worker = %d, status = %d", j, state[j]);
                         sigset_t new_mask;
                         sigfillset(&new_mask);
                         sigdelset(&new_mask, SIGCHLD);
@@ -327,18 +331,31 @@ int master(int workers) {
                     }
 
                     if(state[j] != WORKER_EXITED) {
-                        debug("wait 2");
+                        //debug("wait 2 worker = %d, status = %d", j, state[j]);
                         sigset_t new_mask;
                         sigfillset(&new_mask);
                         sigdelset(&new_mask, SIGCHLD);
                         // sigspend
                         sigsuspend(&new_mask);
                     }
-                    //sigprocmask(SIG_SETMASK, &prev, NULL);
 
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
                 }
 
-            }
+                if(state[j] == WORKER_EXITED) {
+                    sigprocmask(SIG_BLOCK, &mask, &prev);
+                    count = count+1;
+                    sigprocmask(SIG_SETMASK, &prev, NULL);
+                    debug("worker exited = %d count = %d", j,count);
+                }
+
+
+            //}
+
+//debug("worker = %d worker status = %d", j, state[j]);
+
+
+} // while count != workers
 
 
             for(int j = 0; j < workers; j++) {
@@ -347,11 +364,9 @@ int master(int workers) {
                     sf_end(); // master process is about to terminate
                     return EXIT_FAILURE;
                 }
-                if(state[j] == WORKER_EXITED) {
-                    count = count+1;
-                    debug("workers exited %d", count);
-                }
             }
+
+
             if(count == workers) { // all children are terminated. terminate the main program
                 debug("ending - success");
                 sf_end(); // master process is about to terminate
@@ -361,6 +376,10 @@ int master(int workers) {
                 sf_end(); // master process is about to terminate
                 return EXIT_FAILURE;
             }
+
+
+
+
 
         }
     }
