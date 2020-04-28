@@ -35,22 +35,32 @@ int worker(void) {
 
     if(signal(SIGTERM, sigterm_handler) == SIG_ERR) {
         perror("signal error");
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
     sigset_t mask_all, mask_hup, prev_mask;
-    sigfillset(&mask_all);
-    sigemptyset(&mask_hup);
-    sigaddset(&mask_hup, SIGHUP);
+    if(sigfillset(&mask_all) == -1) {
+        perror("fillset error");
+        exit(EXIT_FAILURE);
+    }
+    if(sigemptyset(&mask_hup) == -1) {
+        perror("emptyset error");
+        exit(EXIT_FAILURE);
+    }
+    if(sigaddset(&mask_hup, SIGHUP) == -1) {
+        perror("addset error");
+        exit(EXIT_FAILURE);
+    }
+
     if(signal(SIGHUP, sighup_handler) == SIG_ERR) {
         perror("signal error");
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
     debug("Idling - sent SIGSTOP to itself");
     if(raise(SIGSTOP) != 0) { // IDLE
         perror("raise error");
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
     //SIGCONT = CONTINUED // master
@@ -64,34 +74,40 @@ int worker(void) {
         struct problem* problem_ptr = malloc(sizeof(struct problem)); // allocated space for probem = header + data
         if(problem_ptr == NULL) {
             perror("malloc error");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
         fread(problem_ptr, sizeof(struct problem), 1, stdin);// read stdin to get header
         //ferror - EOF includes short count, which is not an error
         if(ferror(stdin)) {
             perror("fread error");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
         problem_ptr = realloc(problem_ptr, problem_ptr -> size); // realloc size
         if(problem_ptr == NULL) {
             perror("w realloc error");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
         // continue to read stdin to get 'data' = total size - header size
         fread(problem_ptr->data, (problem_ptr -> size - sizeof(struct problem)), 1, stdin);
         // ferror
         if(ferror(stdin)) {
             perror("fread error");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
 
         debug("Solving Problem");
         // attempts to solve problem
         // BLOCK SIGHUP - result may be unintialized
-        sigprocmask(SIG_BLOCK, &mask_hup, &prev_mask);
+        if(sigprocmask(SIG_BLOCK, &mask_hup, &prev_mask) == -1) {
+            perror("mask block error");
+            exit(EXIT_FAILURE);
+        }
         struct result* result_ptr = (void*)(solvers[problem_ptr -> type].solve(problem_ptr, &canceled));
         // UNBLOCK
-        sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+        if(sigprocmask(SIG_SETMASK, &prev_mask, NULL) == -1) {
+            perror("mask unblock error");
+            exit(EXIT_FAILURE);
+        }
         // until 1) solution is found
         // 2) solution procedure fails
             // returns null if failed or canceled *****************
@@ -110,7 +126,7 @@ int worker(void) {
         }
         if(fflush(stdout) == EOF) {
             perror("fflush error");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
         free(result_ptr);
 
@@ -121,7 +137,7 @@ int worker(void) {
         debug("Stopped");
         if(raise(SIGSTOP) !=0) {
             perror("raise error");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
     }
 
