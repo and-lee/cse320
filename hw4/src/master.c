@@ -291,7 +291,6 @@ int master(int workers) {
                 }
             }
 
-
         } else { // get_problem_variant == NULL = no more workers
             debug("no more problems to solve");
 
