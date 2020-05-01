@@ -32,17 +32,22 @@ int main(int argc, char* argv[]){
     // on which the server should listen.
     int option;
     int port;
+    int temp = 0;
     while((option = getopt(argc, argv, "p:")) != EOF) {
         switch(option) {
             case 'p':
                 if((port = atoi(optarg++)) < 1024) {
+                    temp = 1;
                     fprintf(stderr, "-p (port) requires a valid port number\n");
                     exit(EXIT_FAILURE);
                 }
                 break;
+            default:
+                fprintf(stderr, "Usage: bin/pbx -p <port>\n");
+                exit(EXIT_FAILURE);
         }
     }
-    if(option == -1) { // fail
+    if(temp == 0) {
         fprintf(stderr, "Usage: bin/pbx -p <port>\n");
         exit(EXIT_FAILURE);
     }
@@ -56,11 +61,6 @@ int main(int argc, char* argv[]){
     // run function pbx_client_service().  In addition, you should install
     // a SIGHUP handler, so that receipt of SIGHUP will perform a clean
     // shutdown of the server.
-
-    /*fprintf(stderr, "You have to finish implementing main() "
-	    "before the PBX server will function.\n");
-
-    terminate(EXIT_FAILURE);*/
 
     struct sigaction sa;
     sa.sa_handler = server_shutdown_handler;
