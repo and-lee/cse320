@@ -30,14 +30,18 @@ int main(int argc, char* argv[]){
     // Option processing should be performed here.
     // Option '-p <port>' is required in order to specify the port number
     // on which the server should listen.
+
+    if(argc != 3) {
+        fprintf(stderr, "Usage: bin/pbx -p <port>\n");
+        exit(EXIT_FAILURE);
+    }
+
     int option;
     int port;
-    int temp = 0;
     while((option = getopt(argc, argv, "p:")) != EOF) {
         switch(option) {
             case 'p':
                 if((port = atoi(optarg++)) < 1024) {
-                    temp = 1;
                     fprintf(stderr, "-p (port) requires a valid port number\n");
                     exit(EXIT_FAILURE);
                 }
@@ -46,10 +50,6 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Usage: bin/pbx -p <port>\n");
                 exit(EXIT_FAILURE);
         }
-    }
-    if(temp == 0) {
-        fprintf(stderr, "Usage: bin/pbx -p <port>\n");
-        exit(EXIT_FAILURE);
     }
 
     // Perform required initialization of the PBX module.
