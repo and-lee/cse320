@@ -24,8 +24,6 @@ void *pbx_client_service(void *arg) {
     int c;
     char *str = malloc(sizeof(char));
     int len = 0;
-    int dial = 0;
-    int chat = 0;
     while((c = fgetc(in)) != EOF) {
 
         if(ferror(in) != 0) { // EOF read
@@ -37,66 +35,30 @@ void *pbx_client_service(void *arg) {
         len = len + 1;
         str = realloc(str, (len+1)*sizeof(char));
 
-        /*if(strcmp(str, tu_command_names[TU_DIAL_CMD]) == 0) {
-            debug("dialED");
-            // int tu_dial(TU *tu, int ext): Dial an extension on a TU.
-            // error *
-            // space
-            if((c=fgetc(in)) == ' ') {
-                dial = 1;
-                len = 0;
-            }
-        }
-        if(strcmp(str, tu_command_names[TU_CHAT_CMD]) == 0) {
-            debug("chatED");
-            // int tu_chat(TU *tu, char *msg): "Chat" over a connection.
-            // space ?
-            chat = 1;
-            len = 0;
-        }*/
-        //if(c == ' ') {
-            //debug("first space");
-            char *word = malloc((len+1)*sizeof(char));
-            strcpy(word, str);
-            word[len-1] = '\0';
-            if(strcmp(word, tu_command_names[TU_DIAL_CMD]) == 0) {
-                //debug("dialED");
-                // int tu_dial(TU *tu, int ext): Dial an extension on a TU.
-                // error *
-                // space
-                dial = 1;
-                len = 0;
-            }
-            if(strcmp(word, tu_command_names[TU_CHAT_CMD]) == 0) {
-                //debug("chatED");
-                // int tu_chat(TU *tu, char *msg): "Chat" over a connection.
-                // space ?
-                chat = 1;
-                len = 0;
-            }
-            free(word);
-        //}
-
         if(c == '\n' && str[len-2] == '\r') {
             str[len-2] = '\0';
-            //debug("x %s", str);
-
+            len = len -1;
             if(strcmp(str, tu_command_names[TU_PICKUP_CMD]) == 0) {
                 tu_pickup(client);
             } else if(strcmp(str, tu_command_names[TU_HANGUP_CMD]) == 0) {
                 tu_hangup(client);
             } else {
-                if(dial) {
-                    //debug("d %s", str);
-                    tu_dial(client, atoi(str));
-                    dial = 0;
-                } else if(chat) {
-                    //debug("c %s", str);
-                    tu_chat(client, str);
-                    chat = 0;
+                if(str[4] == ' ') { // space
+                    char *word = malloc(5*sizeof(char));
+                    strncpy(word, str, 4);
+                    word[4] = '\0';
+                    if(strcmp(word, tu_command_names[TU_DIAL_CMD]) == 0) {
+                        word = realloc(word, (len-5)*sizeof(char));
+                        strcpy(word, str+5);
+                        tu_dial(client, atoi(word));
+                    } else if(strcmp(word, tu_command_names[TU_CHAT_CMD]) == 0) {
+                        word = realloc(word, (len-5)*sizeof(char));
+                        strcpy(word, str+5);
+                        tu_chat(client, word);
+                    }
+                    free(word);
                 }
             }
-
             len = 0;
         }
     }
