@@ -1,18 +1,19 @@
 #include "pbx.h"
 #include "server.h"
 #include "debug.h"
+#include <stdio.h>
 
 #include "csapp.h"
 
 struct tu { //typedef struct tu TU;
-    struct tu* peer;
+    struct tu *peer;
     TU_STATE state; // str
-    int fd; // FILE* fd;
-    int extension_number; // fd = extension number
+    int fd; // file descriptor
+    // int extension_number; // fd = extension number
 };
 
 struct pbx { //typedef struct pbx PBX;
-    struct tu* clients[PBX_MAX_EXTENSIONS];
+    struct tu *clients[PBX_MAX_EXTENSIONS];
 };
 
 
@@ -40,6 +41,7 @@ typedef enum tu_state {
 PBX *pbx_init() {
     // mutex **************
 
+    // print string
     struct pbx *PBX = malloc(sizeof(struct pbx)); // malloc(sizeof(struct tu) * PBX_MAX_EXTENSIONS);
     return PBX;
 }
@@ -74,43 +76,35 @@ TU *pbx_register(PBX *pbx, int fd) {
     // mutex **************
 
     //add to pbx->clients
-    for(int i = 0; i < PBX_MAX_EXTENSIONS; i++) {
-        if(pbx->clients[i] == NULL) {
-            struct tu* TU = malloc(sizeof(struct tu));
-            if(TU) {
-                TU->fd = fd;
-                TU->state = TU_ON_HOOK;
-                TU->extension_number = i; // exetension_number = fd *********
-                pbx->clients[i] = TU;
-                // notification of assigned extension number sent to network
-                FILE * out;
-                if((out = fdopen(fd, "w")) == NULL) { // write problem
-                    perror("unable to create output stream");
-                    exit(EXIT_FAILURE);
-                }
-                //fprintf();
-                if(ferror(out)) { //ferror
-                    //close
-                    perror("out ferror");
-                    exit(EXIT_FAILURE);
-                }
-                //fflush after entire problem is written
-                if(fflush(out) == EOF) {
-                    perror("fflush error");
-                    exit(EXIT_FAILURE);
-                }
-
-
-            }
-            return TU;
+    struct tu *TU = malloc(sizeof(struct tu)); // free in unregister
+    if(TU && pbx->clients[fd] == NULL) {
+        TU->fd = fd;
+        TU->state = TU_ON_HOOK;
+        pbx->clients[fd] = TU;
+        // notification of assigned extension number sent to network
+        FILE *out;
+        if((out = fdopen(fd, "w")) == NULL) { // write problem
+            perror("unable to create output stream");
+            exit(EXIT_FAILURE);
         }
+        // ON HOOK <fd>
+        if(fprintf(out, "%s %d", tu_state_names[TU->state], fd) < 0) {
+            perror("fprintf error");
+            exit(EXIT_FAILURE);
+        }
+        //fflush after
+        if(fflush(out) == EOF) {
+            perror("fflush error");
+            exit(EXIT_FAILURE);
+        }
+        // close ****************************
+        fclose(out);
     }
     return NULL; // registration failed
 }
 
 /*
  * Unregister a TU from a PBX.
- * This amounts to "unplugging a telephone unit from the PBX".
  *
  * @param pbx  The PBX.
  * @param tu  The TU to be unregistered.
@@ -118,7 +112,13 @@ TU *pbx_register(PBX *pbx, int fd) {
  * @return 0 if unregistration succeeds, otherwise -1.
  */
 int pbx_unregister(PBX *pbx, TU *tu) {
-
+    int extension_number = tu->fd;
+    free(tu);
+    // check if freed in pbx->clients
+    if(pbx->clients[extension_number] == NULL) {
+        return 0; // successful
+    }
+    return -1;
 }
 
 /*
@@ -145,7 +145,7 @@ int tu_fileno(TU *tu) {
  * @return the extension number, if any, otherwise -1.
  */
 int tu_extension(TU *tu) {
-    return tu->extension_number;
+    return tu->fd;
 }
 
 /*
