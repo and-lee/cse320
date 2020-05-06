@@ -10,6 +10,7 @@ struct tu { //typedef struct tu TU;
     TU_STATE state; // str
     int fd; // file descriptor
     // int extension_number; // fd = extension number
+    FILE *out;
 };
 
 struct pbx { //typedef struct pbx PBX;
@@ -91,16 +92,18 @@ TU *pbx_register(PBX *pbx, int fd) {
             perror("unable to create output stream");
             exit(EXIT_FAILURE);
         }
+        TU->out = out;
         // ON HOOK <fd>
-        if(fprintf(out, "%s %d\n", tu_state_names[TU->state], fd) < 0) {
+        if(fprintf(TU->out, "%s %d\n", tu_state_names[TU->state], fd) < 0) {
             perror("fprintf error");
             exit(EXIT_FAILURE);
         }
         //fflush after
-        if(fflush(out) == EOF) {
+        if(fflush(TU->out) == EOF) {
             perror("fflush error");
             exit(EXIT_FAILURE);
         }
+        return TU;
     }
     return NULL; // registration failed
 }
@@ -115,6 +118,7 @@ TU *pbx_register(PBX *pbx, int fd) {
  */
 int pbx_unregister(PBX *pbx, TU *tu) {
     if(tu) { // ptr exists - going to be freed
+        fclose(tu->out); // **********
         free(tu);
         return 0; // successful
     }
@@ -175,52 +179,45 @@ int tu_extension(TU *tu) {
  */
 int tu_pickup(TU *tu) {
     // notification of new state
-    FILE *out;
-    if((out = fdopen(tu->fd, "w")) == NULL) { // write problem
-        perror("unable to create output stream");
-        return -1;
-    }
 
     if(tu->state == TU_ON_HOOK) {
         tu->state = TU_DIAL_TONE; // on hook->dial tone
-        if(fprintf(out, "%s\n", tu_state_names[tu->state]) < 0) {
+        if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
             perror("fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("fflush error");
             return -1;
         }
     }
     if(tu->state == TU_RINGING) {
         tu->state = TU_CONNECTED; // ringing->connected
-        if(fprintf(out, "%s %d\n", tu_state_names[tu->state], tu->peer->fd) < 0) {
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->peer->fd) < 0) {
             perror("fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("fflush error");
             return -1;
         }
         // calling TU also transistions to connected
         tu->peer->state = TU_CONNECTED;
         // notification of calling TU
-        FILE *out_peer;
-        if((out_peer = fdopen(tu->peer->fd, "w")) == NULL) { // write problem
-            perror("unable to create output stream");
-            return -1;
-        }
-        if(fprintf(out_peer, "%s %d\n", tu_state_names[tu->peer->state], tu->fd) < 0) {
+        if(fprintf(tu->peer->out, "%s %d\n", tu_state_names[tu->peer->state], tu->fd) < 0) {
             perror("fprintf error");
             return -1;
         }
         //fflush after
-        if(fflush(out_peer) == EOF) {
+        if(fflush(tu->peer->out) == EOF) {
             perror("fflush error");
             return -1;
         }
-        // close ****************************
-        fclose(out_peer);
     }
     // any other state = remains in that state
 
-    //fflush after
-    if(fflush(out) == EOF) {
-        perror("fflush error");
-        return -1;
-    }
     return 0;
 }
 
