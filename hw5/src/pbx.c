@@ -17,22 +17,11 @@ struct pbx { //typedef struct pbx PBX;
     struct tu *clients[PBX_MAX_EXTENSIONS];
 };
 
-
-/* The possible states that a TU can be in.
-typedef enum tu_state {
+/* typedef enum tu_state {
     TU_ON_HOOK, TU_RINGING, TU_DIAL_TONE, TU_RING_BACK, TU_BUSY_SIGNAL,
     TU_CONNECTED, TU_ERROR
 } TU_STATE;*/
-/* Array that specifies a printable name for each of the TU states.
- * These names should be used when sending state-change notifications to
- * the underlying network clients.  They may also be used for debugging
- * purposes. */
-//extern char *tu_state_names[]; [TU_ON_HOOK/enum tu_state];
-
-//#define PBX_MAX_EXTENSIONS FD_SETSIZE
-//#define EOL "\r\n"
-//extern PBX *pbx;
-
+//extern char *tu_state_names[];
 
 /*
  * Initialize a new PBX.
@@ -71,8 +60,6 @@ void pbx_shutdown(PBX *pbx) {
  * A notification of the assigned extension number is sent to the underlying network
  * client.
  *
- * @param pbx  The PBX.
- * @param fd  File descriptor providing access to the underlying network client.
  * @return A TU object representing the client TU, if registration succeeds, otherwise NULL.
  * The caller is responsible for eventually calling pbx_unregister to free the TU object
  * that was returned.
@@ -109,10 +96,6 @@ TU *pbx_register(PBX *pbx, int fd) {
 }
 
 /*
- * Unregister a TU from a PBX.
- *
- * @param pbx  The PBX.
- * @param tu  The TU to be unregistered.
  * This object is freed as a result of the call and must not be used again.
  * @return 0 if unregistration succeeds, otherwise -1.
  */
@@ -131,7 +114,6 @@ int pbx_unregister(PBX *pbx, TU *tu) {
  * the connection.  Output to the connection must only be performed within
  * the PBX functions.
  *
- * @param tu
  * @return the underlying file descriptor, if any, otherwise -1.
  */
 int tu_fileno(TU *tu) {
@@ -148,7 +130,6 @@ int tu_fileno(TU *tu) {
  * The value returned might be the same as the value returned by tu_fileno(),
  * but is not necessarily so.
  *
- * @param tu
  * @return the extension number, if any, otherwise -1.
  */
 int tu_extension(TU *tu) {
@@ -365,8 +346,6 @@ int tu_hangup(TU *tu) {
 }
 
 /*
- * Dial an extension on a TU.
- *
  *   If the specified extension number does not refer to any currently registered
  *     extension, then the TU transitions to the TU_ERROR state.
  *   Otherwise, if the TU was in the TU_DIAL_TONE state, then what happens depends
@@ -380,33 +359,101 @@ int tu_hangup(TU *tu) {
  *   If the TU was in any state other than TU_DIAL_TONE, then there is no state change.
  *
  * In all cases, a notification of the new state is sent to the network client
- * underlying this TU.  In addition, if the new state is TU_RING_BACK, then the
- * called extension is also notified of its new state (i.e. TU_RINGING).
+ * underlying this TU.
  *
- * @param tu  The tu on which the dialing operation is to be performed.
- * @param ext  The extension to be dialed.
  * @return 0 if successful, -1 if any error occurs.  Note that "error" refers to
  * an underlying I/O or other implementation error; a transition to the TU_ERROR
  * state (with no underlying implementation error) is considered a normal occurrence
  * and would result in 0 being returned.
  */
 int tu_dial(TU *tu, int ext) {
+    // mutex **************
+
+    struct tu *dialed = pbx->clients[ext];
+    if(dialed == NULL) {
+        tu->state = TU_ERROR;
+    }
+    else if(tu->state == TU_DIAL_TONE) {
+        // mutex 2 **************
+
+        if(dialed->state == TU_ON_HOOK) {
+            tu->state = TU_RING_BACK;
+            tu->peer = dialed;
+
+            dialed->state = TU_RINGING;
+            dialed->peer = tu;
+            // notification of peer TU
+            if(fprintf(tu->peer->out, "%s \n", tu_state_names[tu->peer->state]) < 0) {
+                perror("fprintf error");
+                return -1;
+            }
+            //fflush after
+            if(fflush(tu->peer->out) == EOF) {
+                perror("fflush error");
+                return -1;
+            }
+        }
+
+        else if(dialed->state != TU_ON_HOOK) {
+            tu->state = TU_BUSY_SIGNAL;
+        }
+    }
+    //else if(tu->state != TU_DIAL_TONE) {
+    // no state change
+    // notification of new state
+    if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
+        perror("fprintf error");
+        return -1;
+    }
+    //fflush after
+    if(fflush(tu->out) == EOF) {
+        perror("fflush error");
+        return -1;
+    }
+
     return 0;
 }
 
 /*
- * "Chat" over a connection.
- *
  * If the state of the TU is not TU_CONNECTED, then nothing is sent and -1 is returned.
  * Otherwise, the specified message is sent via the network connection to the peer TU.
  * In all cases, the states of the TUs are left unchanged.
  *
- * @param tu  The tu sending the chat.
- * @param msg  The message to be sent.
  * @return 0  If the chat was successfully sent, -1 if there is no call in progress
  * or some other error occurs.
  */
 int tu_chat(TU *tu, char *msg) {
+    // mutex **************
+
+    if(tu->state != TU_CONNECTED) {
+        return -1; // nothing is sent
+    } else {
+    // mutex 2 **************
+
+        // send message
+        // tu->peer->out CHAT msg
+        if(fprintf(tu->peer->out, "CHAT %s\n", msg) < 0) {
+            perror("fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->peer->out) == EOF) {
+            perror("fflush error");
+            return -1;
+        }
+
+        // tu that just sent chat : (chat msg), connected peer#
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->peer->fd) < 0) {
+            perror("fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("fflush error");
+            return -1;
+        }
+
+    }
     return 0;
 }
 
