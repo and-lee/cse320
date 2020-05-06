@@ -5,6 +5,13 @@
 #include "csapp.h"
 
 void *pbx_client_service(void *arg) {
+
+    // ignore SIGPIPE signal
+    if(signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        perror("signal error");
+        exit(EXIT_FAILURE);
+    }
+
     int connfd = *((int *)arg); // get fd
     Pthread_detach(pthread_self()); // detach thread so it does not have to be explicitly reaped
     Free(arg); // free storage
