@@ -159,8 +159,6 @@ int tu_extension(TU *tu) {
 }
 
 /*
- * Take a TU receiver off-hook (i.e. pick up the handset).
- *
  *   If the TU was in the TU_ON_HOOK state, it goes to the TU_DIAL_TONE state.
  *   If the TU was in the TU_RINGING state, it goes to the TU_CONNECTED state,
  *     reflecting an answered call.  In this case, the calling TU simultaneously
@@ -168,29 +166,14 @@ int tu_extension(TU *tu) {
  *   If the TU was in any other state, then it remains in that state.
  *
  * In all cases, a notification of the new state is sent to the network client
- * underlying this TU. In addition, if the new state is TU_CONNECTED, then the
- * calling TU is also notified of its new state.
+ * underlying this TU.
  *
- * @param tu  The TU that is to be taken off-hook.
- * @return 0 if successful, -1 if any error occurs.  Note that "error" refers to
- * an underlying I/O or other implementation error; a transition to the TU_ERROR
- * state (with no underlying implementation error) is considered a normal occurrence
- * and would result in 0 being returned.
+ * @return 0 if successful, -1 if any error occurs.
  */
 int tu_pickup(TU *tu) {
-    // notification of new state
 
     if(tu->state == TU_ON_HOOK) {
         tu->state = TU_DIAL_TONE; // on hook->dial tone
-        if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
-            perror("fprintf error");
-            return -1;
-        }
-        //fflush after
-        if(fflush(tu->out) == EOF) {
-            perror("fflush error");
-            return -1;
-        }
     }
     if(tu->state == TU_RINGING) {
         tu->state = TU_CONNECTED; // ringing->connected
@@ -215,8 +198,19 @@ int tu_pickup(TU *tu) {
             perror("fflush error");
             return -1;
         }
+        return 0;
     }
     // any other state = remains in that state
+    // notification of new state
+    if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
+        perror("fprintf error");
+        return -1;
+    }
+    //fflush after
+    if(fflush(tu->out) == EOF) {
+        perror("fflush error");
+        return -1;
+    }
 
     return 0;
 }
