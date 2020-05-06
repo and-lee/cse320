@@ -118,7 +118,7 @@ TU *pbx_register(PBX *pbx, int fd) {
  */
 int pbx_unregister(PBX *pbx, TU *tu) {
     if(tu) { // ptr exists - going to be freed
-        fclose(tu->out); // **********
+        fclose(tu->out); // ***************** shutdown
         free(tu);
         return 0; // successful
     }
@@ -171,11 +171,14 @@ int tu_extension(TU *tu) {
  * @return 0 if successful, -1 if any error occurs.
  */
 int tu_pickup(TU *tu) {
+    // mutex **************
 
     if(tu->state == TU_ON_HOOK) {
         tu->state = TU_DIAL_TONE; // on hook->dial tone
     }
-    if(tu->state == TU_RINGING) {
+
+    // mutex 2 **************
+    else if(tu->state == TU_RINGING) {
         tu->state = TU_CONNECTED; // ringing->connected
         if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->peer->fd) < 0) {
             perror("fprintf error");
@@ -200,6 +203,7 @@ int tu_pickup(TU *tu) {
         }
         return 0;
     }
+
     // any other state = remains in that state
     // notification of new state
     if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
@@ -216,8 +220,6 @@ int tu_pickup(TU *tu) {
 }
 
 /*
- * Hang up a TU (i.e. replace the handset on the switchhook).
- *
  *   If the TU was in the TU_CONNECTED state, then it goes to the TU_ON_HOOK state.
  *     In addition, in this case the peer TU (the one to which the call is currently
  *     connected) simultaneously transitions to the TU_DIAL_TONE state.
@@ -232,17 +234,133 @@ int tu_pickup(TU *tu) {
  *   If the TU was in any other state, then there is no change of state.
  *
  * In all cases, a notification of the new state is sent to the network client
- * underlying this TU.  In addition, if the previous state was TU_CONNECTED,
- * TU_RING_BACK, or TU_RINGING, then the peer, called, or calling TU is also
- * notified of its new state.
+ * underlying this TU.
  *
- * @param tu  The tu that is to be hung up.
  * @return 0 if successful, -1 if any error occurs.  Note that "error" refers to
  * an underlying I/O or other implementation error; a transition to the TU_ERROR
  * state (with no underlying implementation error) is considered a normal occurrence
  * and would result in 0 being returned.
  */
 int tu_hangup(TU *tu) {
+    // mutex **************
+
+    // mutex 2 **************
+    if(tu->state == TU_CONNECTED) {
+        tu->state = TU_ON_HOOK; // connected->on hook
+        // *
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+            perror("fprintf error");
+            exit(EXIT_FAILURE);
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("fflush error");
+            exit(EXIT_FAILURE);
+        }
+        // peer TU -> dial tone
+        tu->peer->state = TU_DIAL_TONE; // ->dialtone
+        // notification of peer TU
+        if(fprintf(tu->peer->out, "%s \n", tu_state_names[tu->peer->state]) < 0) {
+            perror("fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->peer->out) == EOF) {
+            perror("fflush error");
+            return -1;
+        }
+    }
+    else if(tu->state == TU_RING_BACK) {
+        tu->state = TU_ON_HOOK; // connected->on hook
+        // *
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+            perror("fprintf error");
+            exit(EXIT_FAILURE);
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("fflush error");
+            exit(EXIT_FAILURE);
+        }
+        // peer TU -> dial tone
+        tu->peer->state = TU_ON_HOOK; // ringing->on hook
+        // *
+        if(fprintf(tu->peer->out, "%s %d\n", tu_state_names[tu->peer->state], tu->peer->fd) < 0) {
+            perror("fprintf error");
+            exit(EXIT_FAILURE);
+        }
+        //fflush after
+        if(fflush(tu->peer->out) == EOF) {
+            perror("fflush error");
+            exit(EXIT_FAILURE);
+        }
+    }
+    else if(tu->state == TU_RINGING) {
+        tu->state = TU_ON_HOOK; // connected->on hook
+        // *
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+            perror("fprintf error");
+            exit(EXIT_FAILURE);
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("fflush error");
+            exit(EXIT_FAILURE);
+        }
+        // peer TU -> dial tone
+        tu->peer->state = TU_DIAL_TONE; // ring back->dial tone
+        // notification of peer TU
+        if(fprintf(tu->peer->out, "%s \n", tu_state_names[tu->peer->state]) < 0) {
+            perror("fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->peer->out) == EOF) {
+            perror("fflush error");
+            return -1;
+        }
+    }
+    else if(tu->state == TU_DIAL_TONE || tu->state == TU_BUSY_SIGNAL || tu->state == TU_ERROR) {
+        tu->state = TU_ON_HOOK; // connected->on hook
+        // *
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+            perror("fprintf error");
+            exit(EXIT_FAILURE);
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("fflush error");
+            exit(EXIT_FAILURE);
+        }
+    }
+    else {
+        // no change for rest of states
+        // *
+        if(tu->state == TU_ON_HOOK) {
+            if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+            perror("fprintf error");
+            exit(EXIT_FAILURE);
+            }
+            //fflush after
+            if(fflush(tu->out) == EOF) {
+                perror("fflush error");
+            }
+        }
+        else {
+            // notification of new state
+            if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
+                perror("fprintf error");
+                return -1;
+            }
+            //fflush after
+            if(fflush(tu->out) == EOF) {
+                perror("fflush error");
+                return -1;
+            }
+        }
+
+    }
+
     return 0;
 }
 
