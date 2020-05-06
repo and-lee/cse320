@@ -41,8 +41,12 @@ typedef enum tu_state {
 PBX *pbx_init() {
     // mutex **************
 
-    // print string
     struct pbx *PBX = malloc(sizeof(struct pbx)); // malloc(sizeof(struct tu) * PBX_MAX_EXTENSIONS);
+    if(PBX) {
+        for(int i = 0; i<PBX_MAX_EXTENSIONS; i++) {
+            PBX->clients[i] = NULL; // init
+        }
+    }
     return PBX;
 }
 
@@ -88,7 +92,7 @@ TU *pbx_register(PBX *pbx, int fd) {
             exit(EXIT_FAILURE);
         }
         // ON HOOK <fd>
-        if(fprintf(out, "%s %d", tu_state_names[TU->state], fd) < 0) {
+        if(fprintf(out, "%s %d\n", tu_state_names[TU->state], fd) < 0) {
             perror("fprintf error");
             exit(EXIT_FAILURE);
         }
@@ -97,8 +101,6 @@ TU *pbx_register(PBX *pbx, int fd) {
             perror("fflush error");
             exit(EXIT_FAILURE);
         }
-        // close ****************************
-        fclose(out);
     }
     return NULL; // registration failed
 }
@@ -112,10 +114,8 @@ TU *pbx_register(PBX *pbx, int fd) {
  * @return 0 if unregistration succeeds, otherwise -1.
  */
 int pbx_unregister(PBX *pbx, TU *tu) {
-    int extension_number = tu->fd;
-    free(tu);
-    // check if freed in pbx->clients
-    if(pbx->clients[extension_number] == NULL) {
+    if(tu) { // ptr exists - going to be freed
+        free(tu);
         return 0; // successful
     }
     return -1;
@@ -131,7 +131,10 @@ int pbx_unregister(PBX *pbx, TU *tu) {
  * @return the underlying file descriptor, if any, otherwise -1.
  */
 int tu_fileno(TU *tu) {
-    return tu->fd;
+    if(tu->fd) { // if fd exists
+        return tu->fd;
+    }
+    return -1; // can init tu fd = -1 *
 }
 
 /*
@@ -145,7 +148,10 @@ int tu_fileno(TU *tu) {
  * @return the extension number, if any, otherwise -1.
  */
 int tu_extension(TU *tu) {
-    return tu->fd;
+    if(tu->fd) {
+        return tu->fd;
+    }
+    return -1;
 }
 
 /*
@@ -168,7 +174,54 @@ int tu_extension(TU *tu) {
  * and would result in 0 being returned.
  */
 int tu_pickup(TU *tu) {
+    // notification of new state
+    FILE *out;
+    if((out = fdopen(tu->fd, "w")) == NULL) { // write problem
+        perror("unable to create output stream");
+        return -1;
+    }
 
+    if(tu->state == TU_ON_HOOK) {
+        tu->state = TU_DIAL_TONE; // on hook->dial tone
+        if(fprintf(out, "%s\n", tu_state_names[tu->state]) < 0) {
+            perror("fprintf error");
+            return -1;
+        }
+    }
+    if(tu->state == TU_RINGING) {
+        tu->state = TU_CONNECTED; // ringing->connected
+        if(fprintf(out, "%s %d\n", tu_state_names[tu->state], tu->peer->fd) < 0) {
+            perror("fprintf error");
+            return -1;
+        }
+        // calling TU also transistions to connected
+        tu->peer->state = TU_CONNECTED;
+        // notification of calling TU
+        FILE *out_peer;
+        if((out_peer = fdopen(tu->peer->fd, "w")) == NULL) { // write problem
+            perror("unable to create output stream");
+            return -1;
+        }
+        if(fprintf(out_peer, "%s %d\n", tu_state_names[tu->peer->state], tu->fd) < 0) {
+            perror("fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(out_peer) == EOF) {
+            perror("fflush error");
+            return -1;
+        }
+        // close ****************************
+        fclose(out_peer);
+    }
+    // any other state = remains in that state
+
+    //fflush after
+    if(fflush(out) == EOF) {
+        perror("fflush error");
+        return -1;
+    }
+    return 0;
 }
 
 /*
@@ -199,7 +252,7 @@ int tu_pickup(TU *tu) {
  * and would result in 0 being returned.
  */
 int tu_hangup(TU *tu) {
-
+    return 0;
 }
 
 /*
@@ -229,7 +282,7 @@ int tu_hangup(TU *tu) {
  * and would result in 0 being returned.
  */
 int tu_dial(TU *tu, int ext) {
-
+    return 0;
 }
 
 /*
@@ -245,6 +298,6 @@ int tu_dial(TU *tu, int ext) {
  * or some other error occurs.
  */
 int tu_chat(TU *tu, char *msg) {
-
+    return 0;
 }
 
