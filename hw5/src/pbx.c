@@ -291,6 +291,9 @@ int tu_hangup(TU *tu) {
             return -1;
         }
 
+        tu->peer->peer = NULL;
+        tu->peer = NULL;
+
         V(&tu->mutex);
         V(&tu->peer->mutex);
         return 0;
@@ -330,6 +333,9 @@ int tu_hangup(TU *tu) {
             perror("hangup tu peer out fflush error");
             return -1;
         }
+
+        tu->peer->peer = NULL;
+        tu->peer = NULL;
 
         V(&tu->mutex);
         V(&tu->peer->mutex);
@@ -371,6 +377,9 @@ int tu_hangup(TU *tu) {
             perror("hangup tu peer out fflush error");
             return -1;
         }
+
+        tu->peer->peer = NULL;
+        tu->peer = NULL;
 
         V(&tu->mutex);
         V(&tu->peer->mutex);
@@ -457,6 +466,8 @@ int tu_dial(TU *tu, int ext) {
         else if(tu->state == TU_DIAL_TONE) {
 
             if(dialed->state == TU_ON_HOOK) {
+                tu->peer = dialed;
+
                 // mutex 2 **************
                 V(&tu->mutex);
                 // block smaller fd first
@@ -469,7 +480,7 @@ int tu_dial(TU *tu, int ext) {
                 }
 
                 tu->state = TU_RING_BACK;
-                tu->peer = dialed;
+                //tu->peer = dialed;
 
                 dialed->state = TU_RINGING;
                 dialed->peer = tu;
@@ -525,6 +536,29 @@ int tu_chat(TU *tu, char *msg) {
     //P(&tu->mutex);
 
     if(tu->state != TU_CONNECTED) {
+        if(tu->state == TU_ON_HOOK) {
+            if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+                perror("hangup tu out fprintf error");
+                return -1;
+            }
+            //fflush after
+            if(fflush(tu->out) == EOF) {
+                perror("hangup tu out fflush error");
+                return -1;
+            }
+        }
+        else {
+            // notification of new state
+            if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
+                perror("hangup tu out fprintf error");
+                return -1;
+            }
+            //fflush after
+            if(fflush(tu->out) == EOF) {
+                perror("hangup tu out fflush error");
+                return -1;
+            }
+        }
         //V(&tu->mutex);
         return -1; // nothing is sent
     } else {

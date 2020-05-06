@@ -49,6 +49,8 @@ void *pbx_client_service(void *arg) {
                 tu_pickup(client);
             } else if(strcmp(str, tu_command_names[TU_HANGUP_CMD]) == 0) {
                 tu_hangup(client);
+            } else if(strcmp(str, tu_command_names[TU_CHAT_CMD]) == 0) {
+                tu_chat(client, "");
             } else {
                 if(str[4] == ' ') { // space
                     char *word = malloc(5*sizeof(char));
