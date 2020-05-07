@@ -73,6 +73,7 @@ void *pbx_client_service(void *arg) {
     }
 
     Close(connfd); //close in
+    pbx_unregister(pbx, client);
     free(str);
     return NULL;
 }

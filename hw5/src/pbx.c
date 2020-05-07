@@ -48,12 +48,15 @@ PBX *pbx_init() {
  * If there are any registered extensions, the associated network connections are
  * shut down, which will cause the server threads to terminate.
  * Once all the server threads have terminated, any remaining resources associated
- * with the PBX are freed.  The PBX object itself is freed, and should not be used again.
- *
- * @param pbx  The PBX to be shut down.
+ * with the PBX are freed. The PBX object itself is freed, and should not be used again.
  */
 void pbx_shutdown(PBX *pbx) {
 
+    // shutdown(2) socket rd/wr
+
+    // wait for client service threads to unregister - semaphore
+
+    free(pbx);
 }
 
 /*
@@ -67,6 +70,7 @@ void pbx_shutdown(PBX *pbx) {
  * that was returned.
  */
 TU *pbx_register(PBX *pbx, int fd) {
+debug("resgister");
     //add to pbx->clients
     struct tu *TU = malloc(sizeof(struct tu)); // free in unregister
     if(TU && pbx->clients[fd] == NULL) {
@@ -106,11 +110,12 @@ TU *pbx_register(PBX *pbx, int fd) {
  * @return 0 if unregistration succeeds, otherwise -1.
  */
 int pbx_unregister(PBX *pbx, TU *tu) {
+debug("unresgister");
     if(tu) { // ptr exists - going to be freed
         P(&pbx->mutex);
         pbx->clients[tu->fd] = NULL;
         //V(&pbx->mutex);
-        fclose(tu->out); // ***************** shutdown
+        //fclose(tu->out); // ***************** shutdown
         free(tu);
         V(&pbx->mutex);
         return 0; // successful
@@ -162,14 +167,13 @@ int tu_extension(TU *tu) {
  * @return 0 if successful, -1 if any error occurs.
  */
 int tu_pickup(TU *tu) {
+debug("pickup");
     // mutex **************
     P(&tu->mutex);
+
     if(tu->state == TU_ON_HOOK) {
-
         tu->state = TU_DIAL_TONE; // on hook->dial tone
-
     }
-
     // mutex 2 **************
     else if(tu->state == TU_RINGING) {
         V(&tu->mutex);
@@ -251,6 +255,7 @@ int tu_pickup(TU *tu) {
  * and would result in 0 being returned.
  */
 int tu_hangup(TU *tu) {
+debug("hangup");
     // mutex **************
     P(&tu->mutex);
 
@@ -292,10 +297,9 @@ int tu_hangup(TU *tu) {
         }
 
         tu->peer->peer = NULL;
-        tu->peer = NULL;
-
-        V(&tu->mutex);
         V(&tu->peer->mutex);
+        tu->peer = NULL;
+        V(&tu->mutex);
         return 0;
     }
     else if(tu->state == TU_RING_BACK) {
@@ -335,10 +339,9 @@ int tu_hangup(TU *tu) {
         }
 
         tu->peer->peer = NULL;
-        tu->peer = NULL;
-
-        V(&tu->mutex);
         V(&tu->peer->mutex);
+        tu->peer = NULL;
+        V(&tu->mutex);
         return 0;
     }
     else if(tu->state == TU_RINGING) {
@@ -379,10 +382,9 @@ int tu_hangup(TU *tu) {
         }
 
         tu->peer->peer = NULL;
-        tu->peer = NULL;
-
-        V(&tu->mutex);
         V(&tu->peer->mutex);
+        tu->peer = NULL;
+        V(&tu->mutex);
         return 0;
     }
     else if(tu->state == TU_DIAL_TONE || tu->state == TU_BUSY_SIGNAL || tu->state == TU_ERROR) {
@@ -453,6 +455,7 @@ int tu_hangup(TU *tu) {
  * and would result in 0 being returned.
  */
 int tu_dial(TU *tu, int ext) {
+debug("dial");
     // mutex **************
     P(&tu->mutex);
 
@@ -481,6 +484,15 @@ int tu_dial(TU *tu, int ext) {
 
                 tu->state = TU_RING_BACK;
                 //tu->peer = dialed;
+                if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
+                    perror("dial tu out fprintf error");
+                    return -1;
+                }
+                //fflush after
+                if(fflush(tu->out) == EOF) {
+                    perror("fflush error");
+                    return -1;
+                }
 
                 dialed->state = TU_RINGING;
                 dialed->peer = tu;
@@ -515,7 +527,7 @@ int tu_dial(TU *tu, int ext) {
     }
     //fflush after
     if(fflush(tu->out) == EOF) {
-        perror("fflush error");
+        perror("dial tu out fflush error");
         return -1;
     }
 
@@ -532,8 +544,9 @@ int tu_dial(TU *tu, int ext) {
  * or some other error occurs.
  */
 int tu_chat(TU *tu, char *msg) {
+debug("chat");
     // mutex **************
-    //P(&tu->mutex);
+    P(&tu->mutex);
 
     if(tu->state != TU_CONNECTED) {
         if(tu->state == TU_ON_HOOK) {
@@ -559,11 +572,12 @@ int tu_chat(TU *tu, char *msg) {
                 return -1;
             }
         }
-        //V(&tu->mutex);
+
+        V(&tu->mutex);
         return -1; // nothing is sent
     } else {
         // mutex 2 **************
-        //V(&tu->mutex);
+        V(&tu->mutex);
 
         // block smaller fd first
         if(tu->fd < tu->peer->fd) { // fd < peer fd
