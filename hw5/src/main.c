@@ -54,7 +54,10 @@ int main(int argc, char* argv[]){
 
     // Perform required initialization of the PBX module.
     debug("Initializing PBX...");
-    pbx = pbx_init();
+    if((pbx = pbx_init()) == NULL) {
+        perror("pbx init error");
+        exit(EXIT_FAILURE);
+    }
 
     // TODO: Set up the server socket and enter a loop to accept connections
     // on this socket.  For each connection, a thread should be started to
@@ -74,12 +77,25 @@ int main(int argc, char* argv[]){
     listenfd = Open_listenfd(argv[2]);
     while(1) {
         clientlen = sizeof(struct sockaddr_storage);
-        connfdp = Malloc(sizeof(int));
-        *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
-        Pthread_create(&tid, NULL, pbx_client_service, connfdp);
+        if((connfdp = malloc(sizeof(int))) == NULL) {
+            perror("malloc error");
+            exit(EXIT_FAILURE);
+        }
+        if((*connfdp = accept(listenfd, (SA *)&clientaddr, &clientlen)) == -1) {
+            perror("accept error");
+            exit(EXIT_FAILURE);
+        }
+        if((pthread_create(&tid, NULL, pbx_client_service, connfdp)) != 0) {
+            perror("pthread create error");
+            exit(EXIT_FAILURE);
+        }
     }
-    Close(listenfd);
+    if((close(listenfd)) == -1){
+        perror("close error");
+        exit(EXIT_FAILURE);
+    }
 
+    return EXIT_SUCCESS;
 }
 
 /*

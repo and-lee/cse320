@@ -14,7 +14,7 @@ void *pbx_client_service(void *arg) {
 
     int connfd = *((int *)arg); // get fd
     Pthread_detach(pthread_self()); // detach thread so it does not have to be explicitly reaped
-    Free(arg); // free storage
+    free(arg); // free storage
 
     // register client fd with PBX module
     TU* client = pbx_register(pbx, connfd);
@@ -29,7 +29,9 @@ void *pbx_client_service(void *arg) {
     // parse the message, carry out specified command -PBX module
     // service loop ends when network connection shuts down and EOF is seen
     int c;
-    char *str = malloc(sizeof(char));
+    int size = 1;
+    char *str = malloc(sizeof(char)*size);
+    char *temp;
     int len = 0;
     while((c = fgetc(in)) != EOF) {
 
@@ -40,7 +42,15 @@ void *pbx_client_service(void *arg) {
 
         str[len] = c;
         len = len + 1;
-        str = realloc(str, (len+1)*sizeof(char));
+        if(len >= size) {
+            temp = realloc(str, (size*2)*sizeof(char));
+            if(!temp) {
+                perror("realloc error");
+                exit(EXIT_FAILURE);
+            }
+            size = size * 2;
+            str = temp;
+        }
 
         if(c == '\n' && str[len-2] == '\r') {
             str[len-2] = '\0';
@@ -72,7 +82,7 @@ void *pbx_client_service(void *arg) {
         }
     }
 
-    Close(connfd); //close in
+    close(connfd); //close in
     pbx_unregister(pbx, client);
     free(str);
     return NULL;

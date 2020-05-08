@@ -142,6 +142,8 @@ P(&tu->mutex);
         //P(&tu->mutex);
         if(tu->peer) {
             struct tu* p = tu->peer;
+            TU_STATE tState = tu->state;
+            TU_STATE pState = p->state;
 
             V(&tu->mutex);
             // block smaller fd first
@@ -154,7 +156,7 @@ P(&tu->mutex);
             }
             // lock both tus
             // check if they are still peers
-            if(p->peer != tu && tu->peer != p) {
+            if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
                 // if not peers, unlock both and go back and start over
                 V(&tu->mutex);
                 V(&p->mutex);
@@ -275,6 +277,8 @@ debug("pickup %d", tu->fd);
     // mutex 2
     else if(tu->state == TU_RINGING && tu->peer) {
         struct tu* p = tu->peer;
+        TU_STATE tState = tu->state;
+        TU_STATE pState = p->state;
         V(&tu->mutex);
 
         // block smaller fd first
@@ -287,7 +291,7 @@ debug("pickup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -370,6 +374,8 @@ debug("hangup %d", tu->fd);
         debug("a");
 
         struct tu* p = tu->peer;
+        TU_STATE tState = tu->state;
+        TU_STATE pState = p->state;
         // mutex 2
         V(&tu->mutex);
         // block smaller fd first
@@ -382,7 +388,7 @@ debug("hangup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -424,6 +430,8 @@ debug("hangup %d", tu->fd);
         debug("b");
 
         struct tu* p = tu->peer;
+        TU_STATE tState = tu->state;
+        TU_STATE pState = p->state;
         // mutex 2
         V(&tu->mutex);
         // block smaller fd first
@@ -436,7 +444,7 @@ debug("hangup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -477,6 +485,8 @@ debug("hangup %d", tu->fd);
         debug("c");
 
         struct tu* p = tu->peer;
+        TU_STATE tState = tu->state;
+        TU_STATE pState = p->state;
         // mutex 2
         V(&tu->mutex);
         // block smaller fd first
@@ -489,7 +499,7 @@ debug("hangup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -617,6 +627,8 @@ debug("dial %d", tu->fd);
 
             if(dialed->state == TU_ON_HOOK) {
                 tu->peer = dialed;
+                TU_STATE tState = tu->state;
+                TU_STATE dState = dialed->state;
 
                 // mutex 2
                 V(&tu->mutex);
@@ -630,7 +642,7 @@ debug("dial %d", tu->fd);
                 }
                 // lock both tus
                 // check if they are still peers
-                if(dialed->peer != tu && tu->peer != dialed) {
+                if(dialed->peer != tu && tu->peer != dialed && tState != tu->state && dState != dialed->state) {
                     // if not peers, unlock both and go back and start over
                     V(&tu->mutex);
                     V(&dialed->mutex);
@@ -737,6 +749,8 @@ debug("chat %d", tu->fd);
     } else if(tu->peer) {
         debug("3");
         struct tu* p = tu->peer;
+        TU_STATE tState = tu->state;
+        TU_STATE pState = p->state;
         // mutex 2
         V(&tu->mutex);
 
@@ -750,7 +764,7 @@ debug("chat %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
