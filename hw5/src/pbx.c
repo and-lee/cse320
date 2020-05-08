@@ -134,9 +134,9 @@ P(&pbx->mutex);
 int pbx_unregister(PBX *pbx, TU *tu) {
 debug("unresgister %d", tu->fd);
 P(&pbx->mutex);
-P(&tu->mutex);
+//P(&tu->mutex);
     if(tu) { // ptr exists - going to be freed
-        //P(&tu->mutex);
+        P(&tu->mutex);
         //P(&pbx->mutex);
         //pbx->clients[tu->fd] = NULL;
         //V(&pbx->mutex);
