@@ -85,10 +85,7 @@ int main(int argc, char* argv[]){
             perror("accept error");
             exit(EXIT_FAILURE);
         }
-        if((pthread_create(&tid, NULL, pbx_client_service, connfdp)) != 0) {
-            perror("pthread create error");
-            exit(EXIT_FAILURE);
-        }
+        Pthread_create(&tid, NULL, pbx_client_service, connfdp);
     }
     if((close(listenfd)) == -1){
         perror("close error");

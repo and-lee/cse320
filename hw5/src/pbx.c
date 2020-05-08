@@ -158,7 +158,7 @@ P(&pbx->mutex);
             }
             // lock both tus
             // check if they are still peers
-            if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
+            if((p->peer != tu && tu->peer != p) || (tState != tu->state && pState != p->state)) {
                 // if not peers, unlock both and go back and start over
                 V(&tu->mutex);
                 V(&p->mutex);
@@ -313,7 +313,7 @@ P(&pbx->mutex);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
+        if((p->peer != tu && tu->peer != p) || (tState != tu->state && pState != p->state)) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -414,7 +414,7 @@ P(&pbx->mutex);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
+        if((p->peer != tu && tu->peer != p) || (tState != tu->state && pState != p->state)) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -472,7 +472,7 @@ P(&pbx->mutex);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
+        if((p->peer != tu && tu->peer != p) || (tState != tu->state && pState != p->state)) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -529,7 +529,7 @@ P(&pbx->mutex);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
+        if((p->peer != tu && tu->peer != p) || (tState != tu->state && pState != p->state)) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -677,7 +677,7 @@ P(&pbx->mutex);
                 }
                 // lock both tus
                 // check if they are still peers
-                if(dialed->peer != tu && tu->peer != dialed && tState != tu->state && dState != dialed->state) {
+                if((dialed->peer != tu && tu->peer != dialed) || (tState != tu->state && dState != dialed->state)) {
                     // if not peers, unlock both and go back and start over
                     V(&tu->mutex);
                     V(&dialed->mutex);
@@ -805,7 +805,7 @@ P(&pbx->mutex);
         }
         // lock both tus
         // check if they are still peers
-        if(p->peer != tu && tu->peer != p && tState != tu->state && pState != p->state) {
+        if((p->peer != tu && tu->peer != p) || (tState != tu->state && pState != p->state)) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
