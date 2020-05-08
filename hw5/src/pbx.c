@@ -580,7 +580,7 @@ debug("dial %d", tu->fd);
     // mutex
     P(&tu->mutex);
 
-    if(tu->state == TU_ON_HOOK) {
+    if(tu->state == TU_ON_HOOK || tu->state != TU_DIAL_TONE) {
         // cannot dial when on hook
     } else {
         struct tu *dialed = pbx->clients[ext]; // **** out of bounds error **************
