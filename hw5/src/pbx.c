@@ -97,6 +97,7 @@ P(&pbx->mutex);
         P(&TU->mutex);
         TU->fd = fd;
         TU->state = TU_ON_HOOK;
+        TU->peer = NULL;
         //P(&pbx->mutex);
         pbx->clients[fd] = TU;
         //V(&pbx->mutex);
@@ -135,6 +136,7 @@ debug("unresgister %d", tu->fd);
 P(&pbx->mutex);
 P(&tu->mutex);
     if(tu) { // ptr exists - going to be freed
+        //P(&tu->mutex);
         //P(&pbx->mutex);
         //pbx->clients[tu->fd] = NULL;
         //V(&pbx->mutex);
@@ -162,9 +164,10 @@ P(&tu->mutex);
                 V(&p->mutex);
                 pbx_unregister(pbx, tu);
             }
-            if(p->peer == tu) {
-                debug("x %d", p->fd);
-                p->peer = NULL;
+
+            //if(p->peer == tu) {
+                //debug("x %d", p->fd);
+                //p->peer = NULL;
                 if(p->state == TU_RINGING) {
                     p->state = TU_ON_HOOK;
                 } else { // p->state == CONNECTED || RING_BACK
@@ -200,26 +203,44 @@ P(&tu->mutex);
                         return -1;
                     }
                 }
+                p->peer = NULL;
+                V(&tu->mutex);
+                V(&p->mutex);
+
+                pbx->clients[tu->fd] = NULL;
+                free(tu);
+                V(&pbx->mutex);
+                return 0; // successful
+            } else {
+                V(&tu->mutex);
+
+                pbx->clients[tu->fd] = NULL;
+                free(tu);
+                V(&pbx->mutex);
+                return 0; // successful
             }
 
-            V(&tu->mutex);
+
+            /*V(&tu->mutex);
             V(&p->mutex);
 
             pbx->clients[tu->fd] = NULL;
             free(tu);
             V(&pbx->mutex);
-            return 0; // successful
+            return 0; // successful*/
 
-        }
-        V(&tu->mutex);
+        //}
+        /*V(&tu->mutex);
 
         pbx->clients[tu->fd] = NULL;
         free(tu);
         V(&pbx->mutex);
-        return 0; // successful
+        return 0; // successful*/
     }
+
+
     V(&pbx->mutex);
-    V(&tu->mutex);
+    //V(&tu->mutex);
     return -1;
 }
 
@@ -268,6 +289,7 @@ int tu_extension(TU *tu) {
  */
 int tu_pickup(TU *tu) {
 debug("pickup %d", tu->fd);
+P(&pbx->mutex);
     // mutex
     P(&tu->mutex);
 
@@ -295,6 +317,7 @@ debug("pickup %d", tu->fd);
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
+            V(&pbx->mutex);
             tu_pickup(tu);
         }
 
@@ -325,6 +348,7 @@ debug("pickup %d", tu->fd);
 
         V(&tu->mutex);
         V(&p->mutex);
+        V(&pbx->mutex);
         return 0;
     }
 
@@ -340,6 +364,7 @@ debug("pickup %d", tu->fd);
         return -1;
     }
     V(&tu->mutex);
+    V(&pbx->mutex);
     return 0;
 }
 
@@ -367,6 +392,7 @@ debug("pickup %d", tu->fd);
  */
 int tu_hangup(TU *tu) {
 debug("hangup %d", tu->fd);
+P(&pbx->mutex);
     // mutex
     P(&tu->mutex);
 
@@ -392,6 +418,7 @@ debug("hangup %d", tu->fd);
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
+            V(&pbx->mutex);
             tu_hangup(tu);
         }
 
@@ -424,6 +451,7 @@ debug("hangup %d", tu->fd);
         tu->peer = NULL;
         V(&tu->mutex);
         V(&p->mutex);
+        V(&pbx->mutex);
         return 0;
     }
     else if(tu->state == TU_RING_BACK && tu->peer) {
@@ -448,6 +476,7 @@ debug("hangup %d", tu->fd);
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
+            V(&pbx->mutex);
             tu_hangup(tu);
         }
 
@@ -479,6 +508,7 @@ debug("hangup %d", tu->fd);
         tu->peer = NULL;
         V(&tu->mutex);
         V(&p->mutex);
+        V(&pbx->mutex);
         return 0;
     }
     else if(tu->state == TU_RINGING && tu->peer) {
@@ -503,6 +533,7 @@ debug("hangup %d", tu->fd);
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
+            V(&pbx->mutex);
             tu_hangup(tu);
         }
 
@@ -535,6 +566,7 @@ debug("hangup %d", tu->fd);
         tu->peer = NULL;
         V(&tu->mutex);
         V(&p->mutex);
+        V(&pbx->mutex);
         return 0;
     }
     else if(tu->state == TU_DIAL_TONE || tu->state == TU_BUSY_SIGNAL || tu->state == TU_ERROR) {
@@ -553,6 +585,7 @@ debug("hangup %d", tu->fd);
         }
     }
     else {
+        tu->peer = NULL;
         // no change for rest of states
         // *
         if(tu->state == TU_ON_HOOK) {
@@ -587,6 +620,7 @@ debug("hangup %d", tu->fd);
 debug("g");
 
     V(&tu->mutex);
+    V(&pbx->mutex);
     return 0;
 }
 
@@ -613,10 +647,11 @@ debug("g");
  */
 int tu_dial(TU *tu, int ext) {
 debug("dial %d", tu->fd);
+P(&pbx->mutex);
     // mutex
     P(&tu->mutex);
 
-    if(tu->state == TU_ON_HOOK || tu->state != TU_DIAL_TONE) {
+    if(/*tu->state == TU_ON_HOOK ||*/ tu->state != TU_DIAL_TONE) {
         // cannot dial when on hook
     } else {
         struct tu *dialed = pbx->clients[ext]; // **** out of bounds error **************
@@ -646,6 +681,7 @@ debug("dial %d", tu->fd);
                     // if not peers, unlock both and go back and start over
                     V(&tu->mutex);
                     V(&dialed->mutex);
+                    V(&pbx->mutex);
                     tu_dial(tu, ext);
                 }
 
@@ -677,6 +713,7 @@ debug("dial %d", tu->fd);
 
                 V(&tu->mutex);
                 V(&dialed->mutex);
+                V(&pbx->mutex);
                 return 0;
             }
 
@@ -701,6 +738,8 @@ debug("dial %d", tu->fd);
     }
 
     V(&tu->mutex);
+    V(&pbx->mutex);
+
     return 0;
 }
 
@@ -715,6 +754,7 @@ debug("dial %d", tu->fd);
 int tu_chat(TU *tu, char *msg) {
 debug("chat %d", tu->fd);
     // mutex
+P(&pbx->mutex);
     P(&tu->mutex);
 
     if(tu->state != TU_CONNECTED) {
@@ -745,6 +785,7 @@ debug("chat %d", tu->fd);
         }
 
         V(&tu->mutex);
+        V(&pbx->mutex);
         return -1; // nothing is sent
     } else if(tu->peer) {
         debug("3");
@@ -768,6 +809,7 @@ debug("chat %d", tu->fd);
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
+            V(&pbx->mutex);
             tu_chat(tu, msg);
         }
 
@@ -797,6 +839,7 @@ debug("chat %d", tu->fd);
 
         V(&tu->mutex);
         V(&p->mutex);
+        V(&pbx->mutex);
         return 0;
     }
 
@@ -831,5 +874,6 @@ debug("chat %d", tu->fd);
         }
     }
     V(&tu->mutex);
+    V(&pbx->mutex);
     return 0;
 }

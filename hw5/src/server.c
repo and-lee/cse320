@@ -30,10 +30,16 @@ void *pbx_client_service(void *arg) {
     // service loop ends when network connection shuts down and EOF is seen
     int c;
     int size = 1;
-    char *str = malloc(sizeof(char)*size);
+    char *str; // = malloc(sizeof(char)*size);
     char *temp;
     int len = 0;
+    str = (char*)malloc(size);
     while((c = fgetc(in)) != EOF) {
+
+        /*if(c == -1) {
+            debug("fgetc -1");
+            break;
+        }*/
 
         if(ferror(in) != 0) { // EOF read
             debug("end");
@@ -43,12 +49,12 @@ void *pbx_client_service(void *arg) {
         str[len] = c;
         len = len + 1;
         if(len >= size) {
-            temp = realloc(str, (size*2)*sizeof(char));
+            temp = realloc(str, size*2);
             if(!temp) {
-                perror("realloc error");
-                exit(EXIT_FAILURE);
+                perror("str realloc error");
+                break;
             }
-            size = size * 2;
+            size = size * 2; // adjust size var accordingly
             str = temp;
         }
 
