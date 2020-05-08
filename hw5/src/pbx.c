@@ -154,7 +154,7 @@ P(&tu->mutex);
             }
             // lock both tus
             // check if they are still peers
-            if(tu->peer->peer != tu && tu->peer != p) {
+            if(p->peer != tu && tu->peer != p) {
                 // if not peers, unlock both and go back and start over
                 V(&tu->mutex);
                 V(&p->mutex);
@@ -287,7 +287,7 @@ debug("pickup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(tu->peer->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -296,9 +296,9 @@ debug("pickup %d", tu->fd);
 
         tu->state = TU_CONNECTED; // ringing->connected
         // calling TU also transistions to connected
-        tu->peer->state = TU_CONNECTED;
+        p->state = TU_CONNECTED;
 
-        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->peer->fd) < 0) {
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], p->fd) < 0) {
             perror("pickup tu out fprintf error");
             return -1;
         }
@@ -309,12 +309,12 @@ debug("pickup %d", tu->fd);
         }
 
         // notification of calling TU
-        if(fprintf(tu->peer->out, "%s %d\n", tu_state_names[tu->peer->state], tu->fd) < 0) {
+        if(fprintf(p->out, "%s %d\n", tu_state_names[p->state], tu->fd) < 0) {
             perror("pickup tu peer out fprintf error");
             return -1;
         }
         //fflush after
-        if(fflush(tu->peer->out) == EOF) {
+        if(fflush(p->out) == EOF) {
             perror("pickup tu peer out fflush error");
             return -1;
         }
@@ -382,7 +382,7 @@ debug("hangup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(tu->peer->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -391,7 +391,7 @@ debug("hangup %d", tu->fd);
 
         tu->state = TU_ON_HOOK; // connected->on hook
         // peer TU -> dial tone
-        tu->peer->state = TU_DIAL_TONE; // ->dialtone
+        p->state = TU_DIAL_TONE; // ->dialtone
 
         if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
             perror("hangup tu out fprintf error");
@@ -404,12 +404,12 @@ debug("hangup %d", tu->fd);
         }
 
         // notification of peer TU
-        if(fprintf(tu->peer->out, "%s \n", tu_state_names[tu->peer->state]) < 0) {
+        if(fprintf(p->out, "%s \n", tu_state_names[p->state]) < 0) {
             perror("hangup tu peer out fprintf error");
             return -1;
         }
         //fflush after
-        if(fflush(tu->peer->out) == EOF) {
+        if(fflush(p->out) == EOF) {
             perror("hangup tu peer out fflush error");
             return -1;
         }
@@ -436,7 +436,7 @@ debug("hangup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(tu->peer->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -445,7 +445,7 @@ debug("hangup %d", tu->fd);
 
         tu->state = TU_ON_HOOK; // connected->on hook
         // peer TU -> dial tone
-        tu->peer->state = TU_ON_HOOK; // ringing->on hook
+        p->state = TU_ON_HOOK; // ringing->on hook
 
         if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
             perror("hangup tu out fprintf error");
@@ -457,12 +457,12 @@ debug("hangup %d", tu->fd);
             return -1;
         }
 
-        if(fprintf(tu->peer->out, "%s %d\n", tu_state_names[tu->peer->state], tu->peer->fd) < 0) {
+        if(fprintf(p->out, "%s %d\n", tu_state_names[p->state], p->fd) < 0) {
             perror("hangup tu peer out fprintf error");
             return -1;
         }
         //fflush after
-        if(fflush(tu->peer->out) == EOF) {
+        if(fflush(p->out) == EOF) {
             perror("hangup tu peer out fflush error");
             return -1;
         }
@@ -489,7 +489,7 @@ debug("hangup %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(tu->peer->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -498,7 +498,7 @@ debug("hangup %d", tu->fd);
 
         tu->state = TU_ON_HOOK; // connected->on hook
         // peer TU -> dial tone
-        tu->peer->state = TU_DIAL_TONE; // ring back->dial tone
+        p->state = TU_DIAL_TONE; // ring back->dial tone
 
         if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
             perror("hangup tu out fprintf error");
@@ -511,12 +511,12 @@ debug("hangup %d", tu->fd);
         }
 
         // notification of peer TU
-        if(fprintf(tu->peer->out, "%s \n", tu_state_names[tu->peer->state]) < 0) {
+        if(fprintf(p->out, "%s \n", tu_state_names[p->state]) < 0) {
             perror("hangup tu peer out fprintf error");
             return -1;
         }
         //fflush after
-        if(fflush(tu->peer->out) == EOF) {
+        if(fflush(p->out) == EOF) {
             perror("hangup tu peer out fflush error");
             return -1;
         }
@@ -621,16 +621,16 @@ debug("dial %d", tu->fd);
                 // mutex 2
                 V(&tu->mutex);
                 // block smaller fd first
-                if(tu->fd < tu->peer->fd) { // fd < peer fd
+                if(tu->fd < dialed->fd) { // fd < peer fd
                     P(&tu->mutex);
-                    P(&tu->peer->mutex);
+                    P(&dialed->mutex);
                 } else {
-                    P(&tu->peer->mutex);
+                    P(&dialed->mutex);
                     P(&tu->mutex);
                 }
                 // lock both tus
                 // check if they are still peers
-                if(tu->peer->peer != tu && tu->peer != dialed) {
+                if(dialed->peer != tu && tu->peer != dialed) {
                     // if not peers, unlock both and go back and start over
                     V(&tu->mutex);
                     V(&dialed->mutex);
@@ -639,6 +639,9 @@ debug("dial %d", tu->fd);
 
                 tu->state = TU_RING_BACK;
                 //tu->peer = dialed;
+                dialed->state = TU_RINGING;
+                dialed->peer = tu;
+
                 if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
                     perror("dial tu out fprintf error");
                     return -1;
@@ -649,25 +652,24 @@ debug("dial %d", tu->fd);
                     return -1;
                 }
 
-                dialed->state = TU_RINGING;
-                dialed->peer = tu;
                 // notification of peer TU
-                if(fprintf(tu->peer->out, "%s \n", tu_state_names[tu->peer->state]) < 0) {
+                if(fprintf(dialed->out, "%s \n", tu_state_names[dialed->state]) < 0) {
                     perror("dial tu peer out fprintf error");
                     return -1;
                 }
                 //fflush after
-                if(fflush(tu->peer->out) == EOF) {
+                if(fflush(dialed->out) == EOF) {
                     perror("dial tu peer out fflush error");
                     return -1;
                 }
 
                 V(&tu->mutex);
-                V(&tu->peer->mutex);
+                V(&dialed->mutex);
                 return 0;
             }
 
             else if(dialed->state != TU_ON_HOOK) {
+                debug("xxxxx");
                 tu->state = TU_BUSY_SIGNAL;
             }
         }
@@ -748,7 +750,7 @@ debug("chat %d", tu->fd);
         }
         // lock both tus
         // check if they are still peers
-        if(tu->peer->peer != tu && tu->peer != p) {
+        if(p->peer != tu && tu->peer != p) {
             // if not peers, unlock both and go back and start over
             V(&tu->mutex);
             V(&p->mutex);
@@ -758,18 +760,18 @@ debug("chat %d", tu->fd);
 
         // send message
         // tu->peer->out CHAT msg
-        if(fprintf(tu->peer->out, "CHAT %s\n", msg) < 0) {
+        if(fprintf(p->out, "CHAT %s\n", msg) < 0) {
             perror("chat tu peer out fprintf error");
             return -1;
         }
         //fflush after
-        if(fflush(tu->peer->out) == EOF) {
+        if(fflush(p->out) == EOF) {
             perror("chat tu peer out fflush error");
             return -1;
         }
 
         // tu that just sent chat : (chat msg), connected peer#
-        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->peer->fd) < 0) {
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], p->fd) < 0) {
             perror("chat tu out fprintf error");
             return -1;
         }
@@ -780,7 +782,7 @@ debug("chat %d", tu->fd);
         }
 
         V(&tu->mutex);
-        V(&tu->peer->mutex);
+        V(&p->mutex);
         return 0;
     }
 
