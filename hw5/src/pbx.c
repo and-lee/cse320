@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <semaphore.h>
 #include "csapp.h"
+#include <sys/socket.h>
 
 struct tu { //typedef struct tu TU;
     struct tu *peer;
@@ -47,11 +48,32 @@ PBX *pbx_init() {
  * with the PBX are freed. The PBX object itself is freed, and should not be used again.
  */
 void pbx_shutdown(PBX *pbx) {
-
-    // shutdown(2) socket rd/wr
-
+    P(&pbx->mutex);
+    // shutdown all network connections
+    for(int i = 0; i < PBX_MAX_EXTENSIONS; i++) {
+        if(pbx->clients[i]) {
+            // shutdown(2) socket rd/wr
+            if(shutdown(pbx->clients[i]->fd, SHUT_RDWR) != 0) {
+                perror("shutdown error");
+            }
+        }
+    }
+    // wait for threads to terminate
+    // spin
+    int count;
+    while(1) {
+        count = 0;
+        for(int i = 0; i < PBX_MAX_EXTENSIONS; i++) {
+            if(pbx->clients[i] == NULL) {
+                count = count + 1;
+            }
+        }
+        if(count == PBX_MAX_EXTENSIONS) {
+            break;
+        }
+    }
     // wait for client service threads to unregister - semaphore
-
+    V(&pbx->mutex);
     free(pbx);
 }
 

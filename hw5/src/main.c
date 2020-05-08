@@ -61,7 +61,7 @@ int main(int argc, char* argv[]){
     // run function pbx_client_service().  In addition, you should install
     // a SIGHUP handler, so that receipt of SIGHUP will perform a clean
     // shutdown of the server.
-
+    debug("pid %d", getpid());
     struct sigaction sa;
     sa.sa_handler = server_shutdown_handler;
     sigaction(SIGHUP, &sa, NULL);
@@ -78,6 +78,7 @@ int main(int argc, char* argv[]){
         *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
         Pthread_create(&tid, NULL, pbx_client_service, connfdp);
     }
+    Close(listenfd);
 
 }
 
