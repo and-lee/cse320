@@ -163,20 +163,24 @@ P(&tu->mutex);
             if(p->peer == tu) {
                 debug("x %d", p->fd);
                 p->peer = NULL;
-                p->state = TU_DIAL_TONE;
+                if(p->state == TU_RINGING) {
+                    p->state = TU_ON_HOOK;
+                } else { // p->state == CONNECTED || RING_BACK
+                    p->state = TU_DIAL_TONE;
+                }
 
                 // no change for rest of states
                 // *
-                if(tu->state == TU_ON_HOOK) {
+                if(p->state == TU_ON_HOOK) {
                     debug("e");
 
-                    if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
-                        perror("hangup tu out fprintf error");
+                    if(fprintf(p->out, "%s %d\n", tu_state_names[p->state], p->fd) < 0) {
+                        perror("unregister tu out fprintf error");
                         return -1;
                     }
                     //fflush after
-                    if(fflush(tu->out) == EOF) {
-                        perror("5hangup tu out fflush error");
+                    if(fflush(p->out) == EOF) {
+                        perror("unregister tu out fflush error");
                         return -1;
                     }
                 }
@@ -184,13 +188,13 @@ P(&tu->mutex);
                     debug("f");
 
                     // notification of new state
-                    if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
-                        perror("hangup tu out fprintf error");
+                    if(fprintf(p->out, "%s\n", tu_state_names[p->state]) < 0) {
+                        perror("unregister tu out fprintf error");
                         return -1;
                     }
                     //fflush after
-                    if(fflush(tu->out) == EOF) {
-                        perror("6hangup tu out fflush error");
+                    if(fflush(p->out) == EOF) {
+                        perror("2unregister tu out fflush error");
                         return -1;
                     }
                 }
