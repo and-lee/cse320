@@ -177,8 +177,6 @@ P(&pbx->mutex);
                 // no change for rest of states
                 // *
                 if(p->state == TU_ON_HOOK) {
-                    debug("e");
-
                     if(fprintf(p->out, "%s %d\n", tu_state_names[p->state], p->fd) < 0) {
                         perror("unregister tu out fprintf error");
                         return -1;
@@ -190,8 +188,6 @@ P(&pbx->mutex);
                     }
                 }
                 else {
-                    debug("f");
-
                     // notification of new state
                     if(fprintf(p->out, "%s\n", tu_state_names[p->state]) < 0) {
                         perror("unregister tu out fprintf error");
@@ -397,8 +393,6 @@ P(&pbx->mutex);
     P(&tu->mutex);
 
     if(tu->state == TU_CONNECTED && tu->peer) {
-        debug("a");
-
         struct tu* p = tu->peer;
         TU_STATE tState = tu->state;
         TU_STATE pState = p->state;
@@ -455,8 +449,6 @@ P(&pbx->mutex);
         return 0;
     }
     else if(tu->state == TU_RING_BACK && tu->peer) {
-        debug("b");
-
         struct tu* p = tu->peer;
         TU_STATE tState = tu->state;
         TU_STATE pState = p->state;
@@ -512,8 +504,6 @@ P(&pbx->mutex);
         return 0;
     }
     else if(tu->state == TU_RINGING && tu->peer) {
-        debug("c");
-
         struct tu* p = tu->peer;
         TU_STATE tState = tu->state;
         TU_STATE pState = p->state;
@@ -570,8 +560,6 @@ P(&pbx->mutex);
         return 0;
     }
     else if(tu->state == TU_DIAL_TONE || tu->state == TU_BUSY_SIGNAL || tu->state == TU_ERROR) {
-        debug("d");
-
         tu->state = TU_ON_HOOK; // connected->on hook
         // *
         if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
@@ -589,8 +577,6 @@ P(&pbx->mutex);
         // no change for rest of states
         // *
         if(tu->state == TU_ON_HOOK) {
-            debug("e");
-
             if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
                 perror("hangup tu out fprintf error");
                 return -1;
@@ -617,7 +603,6 @@ P(&pbx->mutex);
         }
 
     }
-debug("g");
 
     V(&tu->mutex);
     V(&pbx->mutex);
@@ -759,7 +744,6 @@ P(&pbx->mutex);
 
     if(tu->state != TU_CONNECTED) {
         if(tu->state == TU_ON_HOOK) {
-            debug("1");
             if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
                 perror("chat tu out fprintf error");
                 return -1;
@@ -771,7 +755,6 @@ P(&pbx->mutex);
             }
         }
         else {
-            debug("2");
             // notification of new state
             if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
                 perror("chat tu out fprintf error");
@@ -847,8 +830,6 @@ P(&pbx->mutex);
     // no change for rest of states
     // *
     if(tu->state == TU_ON_HOOK) {
-        debug("e");
-
         if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
             perror("hangup tu out fprintf error");
             return -1;
@@ -860,8 +841,6 @@ P(&pbx->mutex);
         }
     }
     else {
-        debug("f");
-
         // notification of new state
         if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
             perror("hangup tu out fprintf error");

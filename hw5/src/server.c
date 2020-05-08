@@ -36,11 +36,6 @@ void *pbx_client_service(void *arg) {
     str = (char*)malloc(size);
     while((c = fgetc(in)) != EOF) {
 
-        /*if(c == -1) {
-            debug("fgetc -1");
-            break;
-        }*/
-
         if(ferror(in) != 0) { // EOF read
             debug("end");
             break;
