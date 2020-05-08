@@ -20,12 +20,6 @@ struct pbx { //typedef struct pbx PBX;
     sem_t mutex;
 };
 
-/* typedef enum tu_state {
-    TU_ON_HOOK, TU_RINGING, TU_DIAL_TONE, TU_RING_BACK, TU_BUSY_SIGNAL,
-    TU_CONNECTED, TU_ERROR
-} TU_STATE;*/
-//extern char *tu_state_names[];
-
 /*
  * Initialize a new PBX.
  *
@@ -34,11 +28,13 @@ struct pbx { //typedef struct pbx PBX;
 PBX *pbx_init() {
     struct pbx *PBX = malloc(sizeof(struct pbx)); // malloc(sizeof(struct tu) * PBX_MAX_EXTENSIONS);
     if(PBX) {
+        Sem_init(&PBX->mutex, 0 ,1); // mutex = 1
+        P(&PBX->mutex);
         for(int i = 0; i<PBX_MAX_EXTENSIONS; i++) {
             PBX->clients[i] = NULL; // init
         }
+        V(&PBX->mutex);
     }
-    Sem_init(&PBX->mutex, 0 ,1); // mutex = 1
     return PBX;
 }
 
@@ -70,7 +66,8 @@ void pbx_shutdown(PBX *pbx) {
  * that was returned.
  */
 TU *pbx_register(PBX *pbx, int fd) {
-debug("resgister");
+debug("resgister %d", fd);
+P(&pbx->mutex);
     //add to pbx->clients
     struct tu *TU = malloc(sizeof(struct tu)); // free in unregister
     if(TU && pbx->clients[fd] == NULL) {
@@ -78,9 +75,9 @@ debug("resgister");
         P(&TU->mutex);
         TU->fd = fd;
         TU->state = TU_ON_HOOK;
-        P(&pbx->mutex);
+        //P(&pbx->mutex);
         pbx->clients[fd] = TU;
-        V(&pbx->mutex);
+        //V(&pbx->mutex);
 
         // notification of assigned extension number sent to network
         FILE *out;
@@ -100,8 +97,10 @@ debug("resgister");
             exit(EXIT_FAILURE);
         }
         V(&TU->mutex);
+        V(&pbx->mutex);
         return TU;
     }
+    V(&pbx->mutex);
     return NULL; // registration failed
 }
 
@@ -110,16 +109,89 @@ debug("resgister");
  * @return 0 if unregistration succeeds, otherwise -1.
  */
 int pbx_unregister(PBX *pbx, TU *tu) {
-debug("unresgister");
+debug("unresgister %d", tu->fd);
+P(&pbx->mutex);
+P(&tu->mutex);
     if(tu) { // ptr exists - going to be freed
-        P(&pbx->mutex);
-        pbx->clients[tu->fd] = NULL;
+        //P(&pbx->mutex);
+        //pbx->clients[tu->fd] = NULL;
         //V(&pbx->mutex);
-        //fclose(tu->out); // ***************** shutdown
+
+        //P(&tu->mutex);
+        if(tu->peer) {
+            struct tu* p = tu->peer;
+
+            V(&tu->mutex);
+            // block smaller fd first
+            if(tu->fd < p->fd) { // fd < peer fd
+                P(&tu->mutex);
+                P(&p->mutex);
+            } else {
+                P(&p->mutex);
+                P(&tu->mutex);
+            }
+            // lock both tus
+            // check if they are still peers
+            if(tu->peer->peer != tu && tu->peer != p) {
+                // if not peers, unlock both and go back and start over
+                V(&tu->mutex);
+                V(&p->mutex);
+                pbx_unregister(pbx, tu);
+            }
+            if(p->peer == tu) {
+                debug("x %d", p->fd);
+                p->peer = NULL;
+                p->state = TU_DIAL_TONE;
+
+                // no change for rest of states
+                // *
+                if(tu->state == TU_ON_HOOK) {
+                    debug("e");
+
+                    if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+                        perror("hangup tu out fprintf error");
+                        return -1;
+                    }
+                    //fflush after
+                    if(fflush(tu->out) == EOF) {
+                        perror("5hangup tu out fflush error");
+                        return -1;
+                    }
+                }
+                else {
+                    debug("f");
+
+                    // notification of new state
+                    if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
+                        perror("hangup tu out fprintf error");
+                        return -1;
+                    }
+                    //fflush after
+                    if(fflush(tu->out) == EOF) {
+                        perror("6hangup tu out fflush error");
+                        return -1;
+                    }
+                }
+            }
+
+            V(&tu->mutex);
+            V(&p->mutex);
+
+            pbx->clients[tu->fd] = NULL;
+            free(tu);
+            V(&pbx->mutex);
+            return 0; // successful
+
+        }
+        V(&tu->mutex);
+
+        pbx->clients[tu->fd] = NULL;
         free(tu);
         V(&pbx->mutex);
         return 0; // successful
     }
+    V(&pbx->mutex);
+    V(&tu->mutex);
     return -1;
 }
 
@@ -167,24 +239,33 @@ int tu_extension(TU *tu) {
  * @return 0 if successful, -1 if any error occurs.
  */
 int tu_pickup(TU *tu) {
-debug("pickup");
-    // mutex **************
+debug("pickup %d", tu->fd);
+    // mutex
     P(&tu->mutex);
 
     if(tu->state == TU_ON_HOOK) {
         tu->state = TU_DIAL_TONE; // on hook->dial tone
     }
-    // mutex 2 **************
-    else if(tu->state == TU_RINGING) {
+    // mutex 2
+    else if(tu->state == TU_RINGING && tu->peer) {
+        struct tu* p = tu->peer;
         V(&tu->mutex);
 
         // block smaller fd first
-        if(tu->fd < tu->peer->fd) { // fd < peer fd
+        if(tu->fd < p->fd) { // fd < peer fd
             P(&tu->mutex);
-            P(&tu->peer->mutex);
+            P(&p->mutex);
         } else {
-            P(&tu->peer->mutex);
+            P(&p->mutex);
             P(&tu->mutex);
+        }
+        // lock both tus
+        // check if they are still peers
+        if(tu->peer->peer != tu && tu->peer != p) {
+            // if not peers, unlock both and go back and start over
+            V(&tu->mutex);
+            V(&p->mutex);
+            tu_pickup(tu);
         }
 
         tu->state = TU_CONNECTED; // ringing->connected
@@ -197,7 +278,7 @@ debug("pickup");
         }
         //fflush after
         if(fflush(tu->out) == EOF) {
-            perror("pickup tu out fflush error");
+            perror("1pickup tu out fflush error");
             return -1;
         }
 
@@ -213,7 +294,7 @@ debug("pickup");
         }
 
         V(&tu->mutex);
-        V(&tu->peer->mutex);
+        V(&p->mutex);
         return 0;
     }
 
@@ -225,7 +306,7 @@ debug("pickup");
     }
     //fflush after
     if(fflush(tu->out) == EOF) {
-        perror("pickup tu out fflush error");
+        perror("2pickup tu out fflush error");
         return -1;
     }
     V(&tu->mutex);
@@ -255,20 +336,31 @@ debug("pickup");
  * and would result in 0 being returned.
  */
 int tu_hangup(TU *tu) {
-debug("hangup");
-    // mutex **************
+debug("hangup %d", tu->fd);
+    // mutex
     P(&tu->mutex);
 
-    if(tu->state == TU_CONNECTED) {
-        // mutex 2 **************
+    if(tu->state == TU_CONNECTED && tu->peer) {
+        debug("a");
+
+        struct tu* p = tu->peer;
+        // mutex 2
         V(&tu->mutex);
         // block smaller fd first
-        if(tu->fd < tu->peer->fd) { // fd < peer fd
+        if(tu->fd < p->fd) { // fd < peer fd
             P(&tu->mutex);
-            P(&tu->peer->mutex);
+            P(&p->mutex);
         } else {
-            P(&tu->peer->mutex);
+            P(&p->mutex);
             P(&tu->mutex);
+        }
+        // lock both tus
+        // check if they are still peers
+        if(tu->peer->peer != tu && tu->peer != p) {
+            // if not peers, unlock both and go back and start over
+            V(&tu->mutex);
+            V(&p->mutex);
+            tu_hangup(tu);
         }
 
         tu->state = TU_ON_HOOK; // connected->on hook
@@ -281,7 +373,7 @@ debug("hangup");
         }
         //fflush after
         if(fflush(tu->out) == EOF) {
-            perror("hangup tu out fflush error");
+            perror("1hangup tu out fflush error");
             return -1;
         }
 
@@ -296,22 +388,33 @@ debug("hangup");
             return -1;
         }
 
-        tu->peer->peer = NULL;
-        V(&tu->peer->mutex);
+        p->peer = NULL;
         tu->peer = NULL;
         V(&tu->mutex);
+        V(&p->mutex);
         return 0;
     }
-    else if(tu->state == TU_RING_BACK) {
-        // mutex 2 **************
+    else if(tu->state == TU_RING_BACK && tu->peer) {
+        debug("b");
+
+        struct tu* p = tu->peer;
+        // mutex 2
         V(&tu->mutex);
         // block smaller fd first
-        if(tu->fd < tu->peer->fd) { // fd < peer fd
+        if(tu->fd < p->fd) { // fd < peer fd
             P(&tu->mutex);
-            P(&tu->peer->mutex);
+            P(&p->mutex);
         } else {
-            P(&tu->peer->mutex);
+            P(&p->mutex);
             P(&tu->mutex);
+        }
+        // lock both tus
+        // check if they are still peers
+        if(tu->peer->peer != tu && tu->peer != p) {
+            // if not peers, unlock both and go back and start over
+            V(&tu->mutex);
+            V(&p->mutex);
+            tu_hangup(tu);
         }
 
         tu->state = TU_ON_HOOK; // connected->on hook
@@ -324,7 +427,7 @@ debug("hangup");
         }
         //fflush after
         if(fflush(tu->out) == EOF) {
-            perror("hangup tu out fflush error");
+            perror("2hangup tu out fflush error");
             return -1;
         }
 
@@ -338,22 +441,33 @@ debug("hangup");
             return -1;
         }
 
-        tu->peer->peer = NULL;
-        V(&tu->peer->mutex);
+        p->peer = NULL;
         tu->peer = NULL;
         V(&tu->mutex);
+        V(&p->mutex);
         return 0;
     }
-    else if(tu->state == TU_RINGING) {
-        // mutex 2 **************
+    else if(tu->state == TU_RINGING && tu->peer) {
+        debug("c");
+
+        struct tu* p = tu->peer;
+        // mutex 2
         V(&tu->mutex);
         // block smaller fd first
-        if(tu->fd < tu->peer->fd) { // fd < peer fd
+        if(tu->fd < p->fd) { // fd < peer fd
             P(&tu->mutex);
-            P(&tu->peer->mutex);
+            P(&p->mutex);
         } else {
-            P(&tu->peer->mutex);
+            P(&p->mutex);
             P(&tu->mutex);
+        }
+        // lock both tus
+        // check if they are still peers
+        if(tu->peer->peer != tu && tu->peer != p) {
+            // if not peers, unlock both and go back and start over
+            V(&tu->mutex);
+            V(&p->mutex);
+            tu_hangup(tu);
         }
 
         tu->state = TU_ON_HOOK; // connected->on hook
@@ -366,7 +480,7 @@ debug("hangup");
         }
         //fflush after
         if(fflush(tu->out) == EOF) {
-            perror("hangup tu out fflush error");
+            perror("3hangup tu out fflush error");
             return -1;
         }
 
@@ -381,13 +495,15 @@ debug("hangup");
             return -1;
         }
 
-        tu->peer->peer = NULL;
-        V(&tu->peer->mutex);
+        p->peer = NULL;
         tu->peer = NULL;
         V(&tu->mutex);
+        V(&p->mutex);
         return 0;
     }
     else if(tu->state == TU_DIAL_TONE || tu->state == TU_BUSY_SIGNAL || tu->state == TU_ERROR) {
+        debug("d");
+
         tu->state = TU_ON_HOOK; // connected->on hook
         // *
         if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
@@ -396,7 +512,7 @@ debug("hangup");
         }
         //fflush after
         if(fflush(tu->out) == EOF) {
-            perror("hangup tu out fflush error");
+            perror("4hangup tu out fflush error");
             return -1;
         }
     }
@@ -404,17 +520,21 @@ debug("hangup");
         // no change for rest of states
         // *
         if(tu->state == TU_ON_HOOK) {
+            debug("e");
+
             if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
                 perror("hangup tu out fprintf error");
                 return -1;
             }
             //fflush after
             if(fflush(tu->out) == EOF) {
-                perror("hangup tu out fflush error");
+                perror("5hangup tu out fflush error");
                 return -1;
             }
         }
         else {
+            debug("f");
+
             // notification of new state
             if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
                 perror("hangup tu out fprintf error");
@@ -422,12 +542,13 @@ debug("hangup");
             }
             //fflush after
             if(fflush(tu->out) == EOF) {
-                perror("hangup tu out fflush error");
+                perror("6hangup tu out fflush error");
                 return -1;
             }
         }
 
     }
+debug("g");
 
     V(&tu->mutex);
     return 0;
@@ -455,8 +576,8 @@ debug("hangup");
  * and would result in 0 being returned.
  */
 int tu_dial(TU *tu, int ext) {
-debug("dial");
-    // mutex **************
+debug("dial %d", tu->fd);
+    // mutex
     P(&tu->mutex);
 
     if(tu->state == TU_ON_HOOK) {
@@ -471,7 +592,7 @@ debug("dial");
             if(dialed->state == TU_ON_HOOK) {
                 tu->peer = dialed;
 
-                // mutex 2 **************
+                // mutex 2
                 V(&tu->mutex);
                 // block smaller fd first
                 if(tu->fd < tu->peer->fd) { // fd < peer fd
@@ -480,6 +601,14 @@ debug("dial");
                 } else {
                     P(&tu->peer->mutex);
                     P(&tu->mutex);
+                }
+                // lock both tus
+                // check if they are still peers
+                if(tu->peer->peer != tu && tu->peer != dialed) {
+                    // if not peers, unlock both and go back and start over
+                    V(&tu->mutex);
+                    V(&dialed->mutex);
+                    tu_dial(tu, ext);
                 }
 
                 tu->state = TU_RING_BACK;
@@ -490,7 +619,7 @@ debug("dial");
                 }
                 //fflush after
                 if(fflush(tu->out) == EOF) {
-                    perror("fflush error");
+                    perror("1dial tu out fflush error");
                     return -1;
                 }
 
@@ -544,49 +673,62 @@ debug("dial");
  * or some other error occurs.
  */
 int tu_chat(TU *tu, char *msg) {
-debug("chat");
-    // mutex **************
+debug("chat %d", tu->fd);
+    // mutex
     P(&tu->mutex);
 
     if(tu->state != TU_CONNECTED) {
         if(tu->state == TU_ON_HOOK) {
+            debug("1");
             if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
-                perror("hangup tu out fprintf error");
+                perror("chat tu out fprintf error");
                 return -1;
             }
             //fflush after
             if(fflush(tu->out) == EOF) {
-                perror("hangup tu out fflush error");
+                perror("chat tu out fflush error");
                 return -1;
             }
         }
         else {
+            debug("2");
             // notification of new state
             if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
-                perror("hangup tu out fprintf error");
+                perror("chat tu out fprintf error");
                 return -1;
             }
             //fflush after
             if(fflush(tu->out) == EOF) {
-                perror("hangup tu out fflush error");
+                perror("chat tu out fflush error");
                 return -1;
             }
         }
 
         V(&tu->mutex);
         return -1; // nothing is sent
-    } else {
-        // mutex 2 **************
+    } else if(tu->peer) {
+        debug("3");
+        struct tu* p = tu->peer;
+        // mutex 2
         V(&tu->mutex);
 
         // block smaller fd first
-        if(tu->fd < tu->peer->fd) { // fd < peer fd
+        if(tu->fd < p->fd) { // fd < peer fd
             P(&tu->mutex);
-            P(&tu->peer->mutex);
+            P(&p->mutex);
         } else {
-            P(&tu->peer->mutex);
+            P(&p->mutex);
             P(&tu->mutex);
         }
+        // lock both tus
+        // check if they are still peers
+        if(tu->peer->peer != tu && tu->peer != p) {
+            // if not peers, unlock both and go back and start over
+            V(&tu->mutex);
+            V(&p->mutex);
+            tu_chat(tu, msg);
+        }
+
 
         // send message
         // tu->peer->out CHAT msg
@@ -596,7 +738,7 @@ debug("chat");
         }
         //fflush after
         if(fflush(tu->peer->out) == EOF) {
-            perror("dial tu peer out fflush error");
+            perror("chat tu peer out fflush error");
             return -1;
         }
 
@@ -616,6 +758,36 @@ debug("chat");
         return 0;
     }
 
-    //V(&tu->mutex);
-    //return 0;
+
+    // no change for rest of states
+    // *
+    if(tu->state == TU_ON_HOOK) {
+        debug("e");
+
+        if(fprintf(tu->out, "%s %d\n", tu_state_names[tu->state], tu->fd) < 0) {
+            perror("hangup tu out fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("5hangup tu out fflush error");
+            return -1;
+        }
+    }
+    else {
+        debug("f");
+
+        // notification of new state
+        if(fprintf(tu->out, "%s\n", tu_state_names[tu->state]) < 0) {
+            perror("hangup tu out fprintf error");
+            return -1;
+        }
+        //fflush after
+        if(fflush(tu->out) == EOF) {
+            perror("6hangup tu out fflush error");
+            return -1;
+        }
+    }
+    V(&tu->mutex);
+    return 0;
 }
