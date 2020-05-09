@@ -16,9 +16,12 @@
 #include "csapp.h"
 
 static void terminate(int status);
+volatile sig_atomic_t sd = 0;
 
 static void server_shutdown_handler(int signum) {
-    terminate(EXIT_FAILURE);
+    sd = 1;
+    debug("Received signal SIGHUP - Shutting down");
+    //terminate(EXIT_FAILURE);
 }
 
 /*
@@ -67,7 +70,10 @@ int main(int argc, char* argv[]){
     debug("pid %d", getpid());
     struct sigaction sa;
     sa.sa_handler = server_shutdown_handler;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
     sigaction(SIGHUP, &sa, NULL);
+
 
     int listenfd, *connfdp;
     socklen_t clientlen;
@@ -75,15 +81,26 @@ int main(int argc, char* argv[]){
     pthread_t tid;
 
     listenfd = Open_listenfd(argv[2]);
-    while(1) {
+    while(!sd) {
         clientlen = sizeof(struct sockaddr_storage);
         if((connfdp = malloc(sizeof(int))) == NULL) {
             perror("malloc error");
             exit(EXIT_FAILURE);
         }
-        if((*connfdp = accept(listenfd, (SA *)&clientaddr, &clientlen)) == -1) {
-            perror("accept error");
-            exit(EXIT_FAILURE);
+
+        *connfdp = accept(listenfd, (SA *)&clientaddr, &clientlen);
+        /*
+        if(connfdp < 0 ) {
+            debug("fd < 0 error");
+            if(sd) {
+                break;
+            }
+        } else {
+            debug("fd exists");
+        }
+        debug("create");*/
+        if(sd) {
+            break;
         }
         Pthread_create(&tid, NULL, pbx_client_service, connfdp);
     }
@@ -92,7 +109,7 @@ int main(int argc, char* argv[]){
         exit(EXIT_FAILURE);
     }
 
-    return EXIT_SUCCESS;
+    terminate(EXIT_SUCCESS);
 }
 
 /*

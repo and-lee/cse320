@@ -48,6 +48,7 @@ PBX *pbx_init() {
  * with the PBX are freed. The PBX object itself is freed, and should not be used again.
  */
 void pbx_shutdown(PBX *pbx) {
+    debug("shutdown");
     P(&pbx->mutex);
     // shutdown all network connections
     for(int i = 0; i < PBX_MAX_EXTENSIONS; i++) {
@@ -60,16 +61,13 @@ void pbx_shutdown(PBX *pbx) {
     }
     // wait for threads to terminate
     // spin
-    int count;
-    while(1) {
+    int count = 0;
+    while(count != PBX_MAX_EXTENSIONS-4) {
         count = 0;
-        for(int i = 0; i < PBX_MAX_EXTENSIONS; i++) {
+        for(int i = 4; i < PBX_MAX_EXTENSIONS; i++) {
             if(pbx->clients[i] == NULL) {
                 count = count + 1;
             }
-        }
-        if(count == PBX_MAX_EXTENSIONS) {
-            break;
         }
     }
     // wait for client service threads to unregister - semaphore
@@ -133,7 +131,6 @@ P(&pbx->mutex);
  */
 int pbx_unregister(PBX *pbx, TU *tu) {
 debug("unresgister %d", tu->fd);
-P(&pbx->mutex);
 //P(&tu->mutex);
     if(tu) { // ptr exists - going to be freed
         P(&tu->mutex);
@@ -141,7 +138,6 @@ P(&pbx->mutex);
         //pbx->clients[tu->fd] = NULL;
         //V(&pbx->mutex);
 
-        //P(&tu->mutex);
         if(tu->peer) {
             struct tu* p = tu->peer;
             TU_STATE tState = tu->state;
@@ -165,78 +161,61 @@ P(&pbx->mutex);
                 pbx_unregister(pbx, tu);
             }
 
-            //if(p->peer == tu) {
-                //debug("x %d", p->fd);
-                //p->peer = NULL;
-                if(p->state == TU_RINGING) {
-                    p->state = TU_ON_HOOK;
-                } else { // p->state == CONNECTED || RING_BACK
-                    p->state = TU_DIAL_TONE;
-                }
 
-                // no change for rest of states
-                // *
-                if(p->state == TU_ON_HOOK) {
-                    if(fprintf(p->out, "%s %d\n", tu_state_names[p->state], p->fd) < 0) {
-                        perror("unregister tu out fprintf error");
-                        return -1;
-                    }
-                    //fflush after
-                    if(fflush(p->out) == EOF) {
-                        perror("unregister tu out fflush error");
-                        return -1;
-                    }
-                }
-                else {
-                    // notification of new state
-                    if(fprintf(p->out, "%s\n", tu_state_names[p->state]) < 0) {
-                        perror("unregister tu out fprintf error");
-                        return -1;
-                    }
-                    //fflush after
-                    if(fflush(p->out) == EOF) {
-                        perror("2unregister tu out fflush error");
-                        return -1;
-                    }
-                }
-                p->peer = NULL;
-                V(&tu->mutex);
-                V(&p->mutex);
-
-                pbx->clients[tu->fd] = NULL;
-                free(tu);
-                V(&pbx->mutex);
-                return 0; // successful
-            } else {
-                V(&tu->mutex);
-
-                pbx->clients[tu->fd] = NULL;
-                free(tu);
-                V(&pbx->mutex);
-                return 0; // successful
+            if(p->state == TU_RINGING) {
+                p->state = TU_ON_HOOK;
+            } else { // p->state == CONNECTED || RING_BACK
+                p->state = TU_DIAL_TONE;
             }
 
-
-            /*V(&tu->mutex);
+            // no change for rest of states
+            // *
+            if(p->state == TU_ON_HOOK) {
+                if(fprintf(p->out, "%s %d\n", tu_state_names[p->state], p->fd) < 0) {
+                    perror("unregister tu out fprintf error");
+                    return -1;
+                }
+                //fflush after
+                if(fflush(p->out) == EOF) {
+                    perror("unregister tu out fflush error");
+                    return -1;
+                }
+            }
+            else {
+                // notification of new state
+                if(fprintf(p->out, "%s\n", tu_state_names[p->state]) < 0) {
+                    perror("unregister tu out fprintf error");
+                    return -1;
+                }
+                //fflush after
+                if(fflush(p->out) == EOF) {
+                    perror("2unregister tu out fflush error");
+                    return -1;
+                }
+            }
+            p->peer = NULL;
+            pbx->clients[tu->fd] = NULL;
+            debug("a");
+            V(&tu->mutex);
             V(&p->mutex);
 
-            pbx->clients[tu->fd] = NULL;
+            //pbx->clients[tu->fd] = NULL;
             free(tu);
             V(&pbx->mutex);
-            return 0; // successful*/
+            return 0; // successful
+        } else {
+            pbx->clients[tu->fd] = NULL;
+            debug("b");
+            V(&tu->mutex);
 
-        //}
-        /*V(&tu->mutex);
+            //pbx->clients[tu->fd] = NULL;
+            free(tu);
+            V(&pbx->mutex);
+            return 0; // successful
+        }
 
-        pbx->clients[tu->fd] = NULL;
-        free(tu);
-        V(&pbx->mutex);
-        return 0; // successful*/
     }
 
-
-    V(&pbx->mutex);
-    //V(&tu->mutex);
     return -1;
 }
 
@@ -703,7 +682,6 @@ P(&pbx->mutex);
             }
 
             else if(dialed->state != TU_ON_HOOK) {
-                debug("xxxxx");
                 tu->state = TU_BUSY_SIGNAL;
             }
         }
