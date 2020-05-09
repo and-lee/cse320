@@ -195,7 +195,6 @@ debug("unresgister %d", tu->fd);
             }
             p->peer = NULL;
             pbx->clients[tu->fd] = NULL;
-            debug("a");
             V(&tu->mutex);
             V(&p->mutex);
 
@@ -205,7 +204,6 @@ debug("unresgister %d", tu->fd);
             return 0; // successful
         } else {
             pbx->clients[tu->fd] = NULL;
-            debug("b");
             V(&tu->mutex);
 
             //pbx->clients[tu->fd] = NULL;
