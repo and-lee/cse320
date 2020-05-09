@@ -89,16 +89,10 @@ int main(int argc, char* argv[]){
         }
 
         *connfdp = accept(listenfd, (SA *)&clientaddr, &clientlen);
-        /*
         if(connfdp < 0 ) {
-            debug("fd < 0 error");
-            if(sd) {
-                break;
-            }
-        } else {
-            debug("fd exists");
+            perror("accept fd error");
+            exit(EXIT_FAILURE);
         }
-        debug("create");*/
         if(sd) {
             break;
         }
